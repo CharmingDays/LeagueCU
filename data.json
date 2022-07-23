@@ -1,0 +1,11 @@
+{
+    "errors": [],
+    "lowPriorityData": {
+        "bustedLeaverAccessToken": "",
+        "penalizedSummonerIds": [],
+        "penaltyTime": 0,
+        "penaltyTimeRemaining": 0,
+        "reason": ""
+    },
+    "searchState": "Invalid"
+}
