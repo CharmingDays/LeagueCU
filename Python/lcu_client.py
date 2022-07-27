@@ -1,6 +1,4 @@
 import typing
-import requests as rq
-from requests import Response
 import time
 import base64
 import os,json
@@ -14,11 +12,16 @@ def check_and_install_requests():
     installed = {pkg.key for pkg in pkg_resources.working_set}
     missing = required - installed
     if missing:
+        print("modules {} are missing".format(*missing))
         python = sys.executable
         subprocess.check_call([python,'-m','pip','install',*missing],stdout=subprocess.DEVNULL)
-
+        print("New modules were installed, please try restarting the script if it doesn't work.")
+        time.sleep(5)
+       
 
 check_and_install_requests()
+import requests as rq
+from requests import Response
 
 
 class LCU(object):
@@ -227,6 +230,13 @@ class LCU(object):
         url = self.url+"/lol-lobby/v2/lobby/matchmaking/search"
         data = self.session.post(url)
         return data
+
+
+    def decline_match(self):
+        url = self.url + "/lol-lobby-team-builder/v1/ready-check/decline"
+        data = self.session.post(url)
+        return data
+
 
 
     def accept_match(self):
@@ -466,11 +476,19 @@ class AutoFunctions(LCU):
 
 
     def auto_ban_champion(self,championName):
-        pass
+        #NOTE: DOES NOT CHECK IF USER'S TURN IS ALREADY COMPLETED OR NOT
+        while not self.my_turn_pick():
+            time.sleep(.2)
+        
+        self.ban_pick_champion(championName)
 
     def auto_pick_champion(self,championName):
-        pass
+        #NOTE: DOES NOT CHECK IF USER'S TURN IS ALREADY COMPLETED OR NOT
+        while not self.my_turn_pick() and self.current_champ_select_phase() == 'pick':
+            time.sleep(.2)
+        self.ban_pick_champion(championName)
 
 
 autos = AutoFunctions()
 lol = LCU()
+lol.create_lobby("ranked",'bottom','middle')
