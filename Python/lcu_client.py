@@ -1,4 +1,3 @@
-import typing
 import time
 import base64
 import os,json
@@ -71,8 +70,6 @@ class LcuSessionSetup(object):
 
         else:
             self.session.verify = r"{}\riotgames.pem".format(os.getcwd())
-
-
 
 
 class ChampSelect(LcuSessionSetup):
@@ -212,7 +209,6 @@ class ChampSelect(LcuSessionSetup):
         data = self.session.get(url)
         return data
 
-
 class Summoner(LcuSessionSetup):
     def __init__(self) -> None:
         super().__init__()
@@ -256,10 +252,6 @@ class Summoner(LcuSessionSetup):
         url = self.url+"/lol-login/v1/session"
         data = self.session.delete(url)
         return data
-
-
-
-
 
 class Lobby(LcuSessionSetup):
     def __init__(self) -> None:
@@ -419,7 +411,7 @@ class Lobby(LcuSessionSetup):
 
 
     def decline_match(self):
-        url = self.url + "/lol-lobby-team-builder/v1/ready-check/decline"
+        url = self.url + "/lol-matchmaking/v1/ready-check/decline"
         data = self.session.post(url)
         return data
 
@@ -440,7 +432,7 @@ class Lobby(LcuSessionSetup):
         return False
 
 
-class LCU(Lobby):
+class LCU(Lobby,ChampSelect):
     def __init__(self):
         super().__init__()
         # self.session.verify=os.path.join(os.path.dirname(os.path.abspath(__file__)),'riotgames.pem')
@@ -456,8 +448,6 @@ class LCU(Lobby):
         return True
 
  
-
-
 
 
 class AutoFunctions(LCU):
@@ -485,23 +475,19 @@ class AutoFunctions(LCU):
 
 
 
-    def auto_accept_match(self,wait_time:int=3) -> Response:
+    def auto_accept_match(self) -> Response:
         """
         The function will not work if the lobby isn't in queue already and will stop when queue has been cancelled
-        - wait_time
-            - amount in seconds to wait before function starts.
         """
-        time.sleep(wait_time)
-        if self.champion_select_session().ok or self.game_state:
-            #summoner not in lobby or in queue.
+        #SUMMONER NOT IN LOBBY
+        if self.queue_check().status_code == 404:
             return False
+
 
         matchmaking_state = self.search_state()
         if matchmaking_state.json()['searchState'] == "Searching":
-            match_found = self.queue_check().json()['state']
-            while match_found == 'Invalid':
+            while self.queue_check().json()['state'] == 'Invalid':
                 time.sleep(.3)
-                match_found = self.queue_check().json()['state']
             return self.accept_match()
 
         
@@ -515,13 +501,11 @@ class AutoFunctions(LCU):
         
         self.ban_pick_champion(championName)
 
+
+
     def auto_pick_champion(self,championName):
         #NOTE: DOES NOT CHECK IF USER'S TURN IS ALREADY COMPLETED OR NOT
         while not self.my_turn_pick() and self.current_champ_select_phase() == 'pick':
             time.sleep(.2)
         self.ban_pick_champion(championName)
 
-
-# autos = AutoFunctions()
-lol = LCU()
-lol.create_lobby("DRAFT","bottom",'middle')
