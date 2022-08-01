@@ -248,10 +248,23 @@ class Summoner(LcuSessionSetup):
     def logout(self) -> Response:
         """
         Logout the current summoner account
+        THIS WILL NOT LOG YOU OUT OF THE RIOT CLIENT
         """
         url = self.url+"/lol-login/v1/session"
         data = self.session.delete(url)
         return data
+
+
+
+    def closeLeague(self):
+        """
+        Closes the league client
+        IT IS RECOMMENDED TO WAIT A FEW SECONDS (~6) AFTER RUNNING THE LOGOUT FUNCTION BEFORE CLOSING THE CLIENT
+        """
+        subprocess.call(["taskkill", "/f", "/im", "RiotClientServices.exe"])
+        time.sleep(2)
+        subprocess.call(["taskkill", "/f", "/im", "LeagueClient.exe"])
+
 
 class Lobby(LcuSessionSetup):
     def __init__(self) -> None:
@@ -432,7 +445,7 @@ class Lobby(LcuSessionSetup):
         return False
 
 
-class LCU(Lobby,ChampSelect):
+class LCU(Lobby,ChampSelect,Summoner):
     def __init__(self):
         super().__init__()
         # self.session.verify=os.path.join(os.path.dirname(os.path.abspath(__file__)),'riotgames.pem')
@@ -509,3 +522,8 @@ class AutoFunctions(LCU):
             time.sleep(.2)
         self.ban_pick_champion(championName)
 
+
+
+lol = LCU()
+auto = AutoFunctions()
+lol.ban_pick_champion('jinx')
