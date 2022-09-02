@@ -5,6 +5,7 @@ from datetime import datetime
 import subprocess
 import sys
 import pkg_resources
+import random
 def check_and_install_requests():
     #INSTALLS MISSING LIBS IF NOT FOUND
     required = {'requests'}
@@ -37,16 +38,16 @@ class LcuSessionSetup(object):
         Look for the lockfile and setup token and url from lockfile.
         NOTE: THE CLASS WON'T BE ABLE TO MAKE REQUESTS WITHOUT THE LOCKFILE SETUP
         """
-        lockfile = r'C:\Riot Games\League of Legends\lockfile'
+        defaultLockfile = r'C:\Riot Games\League of Legends\lockfile'
         if filePath:
-            lockfile = filePath
+            defaultLockfile = filePath
 
-        if not os.path.exists(lockfile):
-            raise FileExistsError(lockfile)
+        if not os.path.exists(defaultLockfile):
+            raise FileExistsError(defaultLockfile)
         else:
-            lockfile = open(lockfile,'r')
-        rawData = lockfile.read()
-        lockfile.close()
+            defaultLockfile = open(defaultLockfile,'r')
+        rawData = defaultLockfile.read()
+        defaultLockfile.close()
         rawData = rawData.split(":")
         data = {"port":rawData[2],"auth":rawData[3],"method":rawData[4]+"://127.0.0.1"}
         token = base64.b64encode(f'riot:{data["auth"]}'.encode()).decode()
@@ -108,7 +109,7 @@ class ChampSelect(LcuSessionSetup):
         data = self.session.get(url)
         return data
 
-    def hover_champion(self,championId:int):
+    def hover_champion(self,championId):
         """
         Context:
         {
@@ -122,8 +123,15 @@ class ChampSelect(LcuSessionSetup):
             "type": "pick"
         }
         """
+        if type(championId) != int:
+            nameData = rq.get('https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/ff15e0765da4a4d71b73b673cffb20e7d5461a64/champid.json').json()
+            nameData = {key.upper(): value for key,value in nameData.items()}
+            if championId.upper() not in nameData:
+                raise f"Champion {championId} not found"
+            championId = int(nameData[championId.upper()])
+
         phaseData = self.check_action_turn()
-        if not phaseData:
+        if phaseData is False:
             #Indicates it's not local player's turn or all actions have been completed.
             return False
         actionId = phaseData['id']
@@ -138,7 +146,7 @@ class ChampSelect(LcuSessionSetup):
             - returns a tuple of the selectUrl and banData
         """
         if type(champion) != int:
-            nameData = rq.get('https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/ff15e0765da4a4d71b73b673cffb20e7d5461a64/champid.json').json()
+            nameData = rq.get('https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/ef70a51587df781f8d10ecaf588181207cca7c86/champid.json').json()
             nameData = {key.upper(): value for key,value in nameData.items()}
             if champion.upper() not in nameData:
                 raise f"Champion {champion} not found"
@@ -166,7 +174,9 @@ class ChampSelect(LcuSessionSetup):
         False if latest action already completed
         """
         data = self.champion_select_session().json()
-        if not data['actions'][-1][0]['completed']:
+        with open(r"D:\Developer\Scripts\champ_session{}.json".format(random.randint(34,2394834)),'w') as file:
+            file.write(json.dumps(data))
+        if data['actions'][-1][0]['completed'] is False:
             return data['actions'][-1][0]
 
         return False
@@ -190,15 +200,6 @@ class ChampSelect(LcuSessionSetup):
         return data['actions'][-1][0]['type']
 
 
-
-
-
-    def bannable_campions(self) -> Response:
-        """
-        """
-        url = self.url + "/lol-champ-select/v1/bannable-champions"
-        data = self.session.get(url)
-        return data
 
 
     def check_selected_champion(self) -> Response:
@@ -270,6 +271,9 @@ class Lobby(LcuSessionSetup):
     def __init__(self) -> None:
         super().__init__()
 
+    def lobby_data(self):
+
+        return self.session.get(self.url+'/lol-lobby/v2/lobby')
 
     def leave_lobby(self):
         """
@@ -387,6 +391,7 @@ class Lobby(LcuSessionSetup):
 
 
     def penalty_countdown(self):
+        #NOTE: THIS IS ONLY FOR LEAVERBUSTER AND LOWER QUEUE PRIO
         # count down timer for match found??
         #This function should return bool to indicate if there's a penalty.
         url = self.url + '/lol-lobby/v2/lobby/matchmaking/search-state'
@@ -496,7 +501,6 @@ class AutoFunctions(LCU):
         if self.queue_check().status_code == 404:
             return False
 
-
         matchmaking_state = self.search_state()
         if matchmaking_state.json()['searchState'] == "Searching":
             while self.queue_check().json()['state'] == 'Invalid':
@@ -526,4 +530,3 @@ class AutoFunctions(LCU):
 
 lol = LCU()
 auto = AutoFunctions()
-lol.ban_pick_champion('jinx')
