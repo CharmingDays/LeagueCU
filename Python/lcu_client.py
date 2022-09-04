@@ -1,3 +1,4 @@
+from functools import cached_property
 from http.client import INTERNAL_SERVER_ERROR
 import time
 import base64
@@ -28,15 +29,12 @@ from requests import Response
 
 
 
-"""
-Articles for python:
-
-"""
 
 
-class LcuSessionSetup(object):
+
+class RiotFiles(object):
     """
-    Class for dealing with riotgames' files
+    Class for dealing with riotgames' files and other external files for LCU
         - lockfile: the file containing the port, login, http method
         - riotgames.pem: the file containing the SSL certification for making the https requests
     """
@@ -45,6 +43,26 @@ class LcuSessionSetup(object):
         self.lockfile()
         self.riotgames_SSL()
         self.session.headers = {'Authorization':f"Basic {self.token}",'Accept': 'application/json'}
+        self.champion_names = {}
+        self.get_champion_names()
+
+
+    def get_champion_names(self):
+        data = rq.get('https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/ff15e0765da4a4d71b73b673cffb20e7d5461a64/champid.json')
+        if data.ok:
+            self.champion_names = data.json()
+            return True
+        return False
+
+
+    def refresh_champion_names(self,newUrl):
+        data = rq.get(newUrl)
+        if data.ok:
+            self.champion_names = data.json()
+            return True
+
+        return False
+        
 
 
     def lockfile(self,filePath:str=None):
@@ -91,27 +109,12 @@ class LcuSessionSetup(object):
             self.session.verify = r"{}\riotgames.pem".format(current_dir)
 
 
-class ChampSelect(LcuSessionSetup):
+class ChampSelect(RiotFiles):
+    """
+    Champion select methods for the LCU
+    """
     def __init__(self) -> None:
         super().__init__()
-        self.pick_turns = {
-            0:0,
-            1:2,
-            2:2,
-            3:4,
-            4:4,
-            5:1,
-            6:1,
-            7:3,
-            8:3,
-            9:5
-        }
-
-
-    def champs(self):
-        #returns the pickable champs in the champ select
-        return self.session.get(self.url+"/lol-champ-select/v1/pickable-champions")
-
 
     def champion_select_timer(self):
         #NOTE: INCOMPLETE
@@ -130,17 +133,26 @@ class ChampSelect(LcuSessionSetup):
         return data
 
     def pickable_champions(self) -> Response:
+        """
+        Get the current pickable champions in session
+        """
         url = self.url+"/lol-champ-select/v1/pickable-champion-ids"
         data = self.session.get(url)
         return data
 
     @property
     def local_player_cell_id(self):
+        """
+        Returns the localPlayerCellId which is used to identify user's actions.
+        """
         data= self.champion_select_session()
         return data.json()['localPlayerCellId']
 
     @property
     def local_player_cell_data(self):
+        """
+        Returns the current local player's cell data that is in progress
+        """
         sessionData = self.champion_select_session().json()
         for data in sessionData['actions']:
             for innerData in data:
@@ -151,32 +163,44 @@ class ChampSelect(LcuSessionSetup):
 
 
     def hover_data(self,data):
+        """
+        Returns the local player's data for picking phase, mainly looking for the "id" from actions in pick phase
+        """
         #get the summoner's pick id
         for i in data['actions']:
             for inner in i:
-                if inner['type'] == 'pick' and inner['completed'] is False and inner['actorCellId'] == self.local_player_cell_id:
-                    print(inner)
+                if inner['type'] == 'pick' and inner['completed'] is False and inner['actorCellId'] == data['localPlayerCellId']:                    
                     return inner
 
 
-    def champion_id(self,champion):
+    @property
+    def selected_champion(self):
         """
-        get the id of the champion by name
+        returns the currently selected champion
         """
-        nameData = rq.get('https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/ff15e0765da4a4d71b73b673cffb20e7d5461a64/champid.json').json()
-        nameData = {key.upper(): value for key,value in nameData.items()}
-        if champion.upper() not in nameData:
+        data = self.hover_data(self.champion_select_session().json())
+        return data['championId']
+
+    def champion_by_name(self,champion):
+        """
+        Returns the id of the champion by name
+        """
+        championNames = {key.upper(): value for key,value in self.champion_names.items()}
+        if champion.upper() not in championNames:
             raise f"Champion {champion} not found"
-        return int(nameData[champion.upper()])
+        return int(championNames[champion.upper()])
 
 
-
-    def hover_champion(self,championId):
+    def hover_champion(self,champion):
         #NOTE: CLICKING ON A CHAMPION MANUALLY WILL TAKE CONTROL OVER AND THIS WILL NOT WORK ANYMORE
+        #NOTE: THIS SHOULD BE USED ONLY TO BAN/PICK CHAMPIONS
         data = self.champion_select_session().json()
         hoverData = self.hover_data(data)
+
         url = self.url + f'/lol-champ-select/v1/session/actions/{hoverData["id"]}'
-        hoverData['championId'] = self.champion_id(championId)
+        if type(champion) != int:
+            champion = self.champion_by_name(champion)
+        hoverData['championId'] = champion
         return self.session.patch(url,data=json.dumps(hoverData))
 
 
@@ -184,26 +208,15 @@ class ChampSelect(LcuSessionSetup):
         #NOTE: CLICKING ON A CHAMPION MANUALLY WILL TAKE CONTROL OVER AND THIS WILL NOT WORK ANYMORE
         #NOTE: THIS SHOULD BE USED ONLY TO BAN/PICK CHAMPIONS
         """
-        Context:
-        {
-            "actorCellId": 1,
-            "championId": 33,
-            "completed": true,
-            "id": 1,
-            "isAllyAction": true,
-            "isInProgress": false,
-            "pickTurn": 1,
-            "type": "pick"
-        }
+        Sort of an alias to `hover_champion()`
         """
         if type(championId) != int:
             #convert to int 
-            championId = self.champion_id(championId)
+            championId = self.champion_by_name(championId)
 
         if self.is_final_phase:
             #finalization phase already, champions already locked in
             return False
-        print('championId',championId)
         phaseData =  self.local_player_cell_data #the player pick data
         #change the values to local player's 
         phaseData['championId'] = championId
@@ -218,32 +231,28 @@ class ChampSelect(LcuSessionSetup):
             - returns a tuple of the selectUrl and banData
         """
         if type(champion) != int:
-            nameData = rq.get('https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/ef70a51587df781f8d10ecaf588181207cca7c86/champid.json').json()
-            nameData = {key.upper(): value for key,value in nameData.items()}
-            if champion.upper() not in nameData:
-                raise f"Champion {champion} not found"
-            champion = int(nameData[champion.upper()])
+            champion = self.champion_by_name(champion)
 
-        self.select_champion(champion)
+        self.hover_champion(champion)
         url = self.url + f"/lol-champ-select/v1/session/actions/{self.local_player_cell_data['id']}/complete"
         self.session.post(url)
 
     def champion_select_session(self):
         """
+        Get data about the current champion select session.
         404: Not in champion select.
         """
-        #returns champion select session data
         url = self.url + "/lol-champ-select/v1/session"
         data = self.session.get(url)
         return data
 
     @property
-    def timer_phase(self):
+    def current_phase(self):
         """
         Returns the current phase according to the timer
         Timer Phases:
-            - PLANNING X2
-            - BAN_PICK X3
+            - PLANNING
+            - BAN_PICK (ban, ten_bans_reveal)
             - FINALIZATION
         """
         url = self.url + "/lol-champ-select/v1/session"
@@ -258,17 +267,8 @@ class ChampSelect(LcuSessionSetup):
     def is_planning_phase(self) -> bool:
         """
         Checks if it's planning phase
-        Lobby Phases:
-            - PLANNING (Champion declare intent)
-            - BAN 
-            - BAN_REVEAL
-            - PICK
-            - FINALIZATION
         """
-        data = self.champion_select_session()
-
-        data = data.json()
-        if data['timer']['phase'] == "PLANNING" and data['actions'][0][0]['isInProgress']:
+        if self.current_phase == "PLANNING":
             return True
         
         return False
@@ -280,8 +280,10 @@ class ChampSelect(LcuSessionSetup):
         """
         data = self.champion_select_session()
         data = data.json()
-        if data['timer']['phase'] == "BAN_PICK" and data['actions'][0][0]['isInProgress']:
-            return True
+        if data['timer']['phase'] == "BAN_PICK":
+            for phaseData in data['actions'][0]:
+                if phaseData['isInProgress']:
+                    return True
 
         return False
 
@@ -294,8 +296,10 @@ class ChampSelect(LcuSessionSetup):
 
         data = self.champion_select_session()
         data = data.json()
-        if data['timer']['phase'] == 'BAN_PICK' and data['actions'][2][0]['isInProgress']:
-            return True
+        if data['timer']['phase'] == 'BAN_PICK':
+            for phaseData in data['actions'][2:7]:
+                if phaseData['isInProgress']:
+                    return True
 
         return False
     
@@ -304,67 +308,58 @@ class ChampSelect(LcuSessionSetup):
         """
         check if it's the final phase for the champion select
         """
-        data = self.champion_select_session()
-        data = data.json()
-        if data['timer']['phase'] == 'FINALIZATION' and data['actions'][-1][0]['completed']:
+        if self.current_phase== 'FINALIZATION':
             return True
 
         return False
 
 
 
-    def check_action_turn(self,phase=None) -> dict:
+    def current_actor(self,phase=None) -> dict:
         #TODO:
         #NOTE: NEEDS TO BE REMADE
         """
-        Returns the current incomplete phase of the action
+        Returns the current phase data as list
         False if latest action already completed
         """
         data = self.champion_select_session()
         if data.status_code == 404:
             return data.status_code
         data = data.json()
-
-        with open(r"D:\Developer\Scripts\champ_session\champ_session_{}.json".format(phase),'w') as file:
-            file.write(json.dumps(data))
-        if data['actions'][-1][0]['completed'] is False:
-            return data['actions'][-1][0]
+        for actions in data['actions']:
+            for actionData in actions:
+                if actionData['isInProgress']:
+                    return actions
 
         return False
 
-
-    def my_pick_turn(self) -> bool:
+    @property
+    def is_local_player_turn(self) -> bool:
         """
         Checks if it's the local summoner's turn or not.
         """
         data = self.champion_select_session().json()
-        actorCell= data['localPlayerCellId']
-        pickTurn = self.pick_turns[data['localPlayerCellId']]
-        if data['actions'][pickTurn+2]['isInProgress']:
+        if self.local_player_cell_data['isInProgress']:
             return True
 
 
         return False
     
-    def current_champ_select_phase(self) -> str:
-        """
-        Returns the current champion select phase
-        """
-        data = self.champion_select_session().json()
-        return data['actions'][-1][0]['type']
 
-
-
-
-    def check_selected_champion(self) -> Response:
+    def locked_in_champion(self) -> Response:
         """
         Checks what champion the local summoner currently has LOCKED IN
+        0: No champion locked in
         """
         url = self.url+"/lol-champ-select/v1/current-champion"
         data = self.session.get(url)
         return data
 
-class Summoner(LcuSessionSetup):
+
+
+
+
+class Summoner(RiotFiles):
     def __init__(self) -> None:
         super().__init__()
 
@@ -422,7 +417,7 @@ class Summoner(LcuSessionSetup):
         subprocess.call(["taskkill", "/f", "/im", "LeagueClient.exe"])
 
 
-class Lobby(LcuSessionSetup):
+class Lobby(RiotFiles):
     def __init__(self) -> None:
         super().__init__()
 
@@ -689,18 +684,27 @@ class AutoFunctions(LCU):
 
     def auto_ban_champion(self,championName):
         #NOTE: DOES NOT CHECK IF USER'S TURN IS ALREADY COMPLETED OR NOT
-        while not self.my_pick_turn():
+        while not self.is_local_player_turn:
             time.sleep(.2)
         
         self.ban_pick_champion(championName)
 
 
 
-    def auto_pick_champion(self,championName):
+    def auto_pick_champion(self,champion:list):
         #NOTE: DOES NOT CHECK IF USER'S TURN IS ALREADY COMPLETED OR NOT
-        while not self.my_pick_turn() and self.current_champ_select_phase() == 'pick':
+        #TODO: ALLOW RECOMMENDED SELECTION IF ALL CHAMPIONS GIVEN BY USER IS BANNED
+        while self.champion_select_session().ok:
+            if self.current_champ_select_phase == 'pick':
+                if self.is_local_player_turn:
+                    championNames = self.champion_by_name(champion) #convert ids to names 
+                    pickableChamps= self.pickable_champions().json()
+                    for champ in championNames:
+                        if champ in pickableChamps:
+                            return self.ban_pick_champion(champ)
+                    
             time.sleep(.2)
-        self.ban_pick_champion(championName)
+        self.ban_pick_champion(champion)
 
 
 
