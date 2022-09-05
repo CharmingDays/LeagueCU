@@ -1,14 +1,10 @@
-from functools import cached_property
-from http.client import INTERNAL_SERVER_ERROR
 import time
 import base64
 import os,json
 from datetime import datetime
 import subprocess
 import sys
-from xml.etree.ElementPath import prepare_parent, prepare_predicate
 import pkg_resources
-import random
 def check_and_install_requirements():
     #INSTALLS MISSING LIBS IF NOT FOUND
     required = {'requests'}
@@ -48,7 +44,8 @@ class RiotFiles(object):
 
 
     def get_champion_names(self):
-        data = rq.get('https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/ff15e0765da4a4d71b73b673cffb20e7d5461a64/champid.json')
+        #TODO: use data dragon champions instead -> http://ddragon.leagueoflegends.com/cdn/{patch_version}/data/en_US/champion.json
+        data = rq.get('https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/88e3bbaf1b095fd2aac74189a80d2b5f41bd859b/champid.json')
         if data.ok:
             self.champion_names = data.json()
             return True
@@ -156,29 +153,46 @@ class ChampSelect(RiotFiles):
         sessionData = self.champion_select_session().json()
         for data in sessionData['actions']:
             for innerData in data:
-                if innerData['isInProgress'] and innerData['actorCellId'] == sessionData['localPlayerCellId']:
+                if innerData['isInProgress'] and innerData['actorCellId'] == sessionData ['localPlayerCellId']:
                     return innerData
+
 
         return False
 
 
-    def hover_data(self,data):
+
+
+    def hover_data(self):
         """
         Returns the local player's data for picking phase, mainly looking for the "id" from actions in pick phase
         """
         #get the summoner's pick id
+        data = self.champion_select_session().json()
         for i in data['actions']:
             for inner in i:
                 if inner['type'] == 'pick' and inner['completed'] is False and inner['actorCellId'] == data['localPlayerCellId']:                    
                     return inner
 
 
+    def hovered_champions(self):
+        """
+        Returns a list of champions that are hovered by allies
+        """
+        data = self.champion_select_session().json()
+        hoveredChampions = []
+        for actions in data['actions']:
+            for actionData in actions:
+                if actionData['type'] == 'pick' and actionData['completed'] is False:
+                    if actionData['championId'] != 0: #champion intent is shown
+                        hoveredChampions.append(actionData['championId'])
+
+        return hoveredChampions
     @property
     def selected_champion(self):
         """
         returns the currently selected champion
         """
-        data = self.hover_data(self.champion_select_session().json())
+        data = self.hover_data()
         return data['championId']
 
     def champion_by_name(self,champion):
@@ -194,8 +208,7 @@ class ChampSelect(RiotFiles):
     def hover_champion(self,champion):
         #NOTE: CLICKING ON A CHAMPION MANUALLY WILL TAKE CONTROL OVER AND THIS WILL NOT WORK ANYMORE
         #NOTE: THIS SHOULD BE USED ONLY TO BAN/PICK CHAMPIONS
-        data = self.champion_select_session().json()
-        hoverData = self.hover_data(data)
+        hoverData = self.hover_data()
 
         url = self.url + f'/lol-champ-select/v1/session/actions/{hoverData["id"]}'
         if type(champion) != int:
@@ -225,7 +238,8 @@ class ChampSelect(RiotFiles):
         return data
         
     def ban_pick_champion(self,champion) -> Response:
-        #TODO: SHOULD CHECK IF CHAMPION TO LOCK IS SAME AS HOVERED CHAMPION
+        #TODO: MAKE IT SO HOVERED CHAMPION WON'T BE REMOVED 
+        #TODO: SHOULD CHECK IF CHAMPION TO LOCK IS SAME AS HOVERED CHAMPION, MAYBE INCLUDE CHAMPION_ID IN  PAYLOAD?
         """
         @return:
             - returns a tuple of the selectUrl and banData
@@ -255,9 +269,8 @@ class ChampSelect(RiotFiles):
             - BAN_PICK (ban, ten_bans_reveal)
             - FINALIZATION
         """
-        url = self.url + "/lol-champ-select/v1/session"
-        data = self.session.get(url)
-        if data.status_code.ok:
+        data = self.champion_select_session()
+        if data.ok:
             return data.json()['timer']['phase']
         
         return data.status_code
@@ -338,9 +351,11 @@ class ChampSelect(RiotFiles):
         """
         Checks if it's the local summoner's turn or not.
         """
-        data = self.champion_select_session().json()
-        if self.local_player_cell_data['isInProgress']:
-            return True
+        data= self.champion_select_session().json()
+        for actions in data['actions']:
+            for actionData in actions:
+                if actionData['isInProgress'] and actionData['actorCellId'] == data['localPlayerCellId']:
+                    return True
 
 
         return False
@@ -528,6 +543,12 @@ class Lobby(RiotFiles):
         data= self.session.get(url)
         return data
 
+    
+    @property
+    def in_queue(self):
+        data = self.queue_check()
+        if data.ok:
+            return True
 
     def search_state(self) -> Response:
         """
@@ -602,20 +623,21 @@ class Lobby(RiotFiles):
 
 
 
-class LiveGameData(object):
+class LiveGameData(RiotFiles):
     """
     Doc for this API can be found here: https://developer.riotgames.com/docs/lol#game-client-api_live-client-data-api
     """
     def __init__(self) -> None:
-        pass
+        super().__init__()
+
     @property
     def game_state(self) -> bool:
         #Checks if the local player's game has started
         try:
             self.session.get('​https://127.0.0.1:2999/liveclientdata/activeplayername')
+            return True
         except rq.exceptions.InvalidSchema:
             return False
-        return True
 
  
 
@@ -664,7 +686,7 @@ class AutoFunctions(LCU):
 
 
 
-    def auto_accept_match(self) -> Response:
+    def auto_accept_match(self,champSelect=True) -> Response:
         """
         The function will not work if the lobby isn't in queue already and will stop when queue has been cancelled
         """
@@ -672,41 +694,22 @@ class AutoFunctions(LCU):
         if self.queue_check().status_code == 404:
             return False
 
-        matchmaking_state = self.search_state()
-        if matchmaking_state.json()['searchState'] == "Searching":
-            while self.queue_check().json()['state'] == 'Invalid':
-                time.sleep(.3)
-            return self.accept_match()
+        while self.champion_select_session().ok is False:
+            matchmaking_state = self.search_state()
+            if matchmaking_state.json()['searchState'] == "Searching":
+                while self.queue_check().json()['state'] == 'Invalid':
+                    time.sleep(.3)
+                if self.queue_check().json()['playerResponse'] == "Accepted":
+                    pass
+                else:
+                    self.accept_match()
 
         
         return matchmaking_state
 
 
-    def auto_ban_champion(self,championName):
-        #NOTE: DOES NOT CHECK IF USER'S TURN IS ALREADY COMPLETED OR NOT
-        while not self.is_local_player_turn:
-            time.sleep(.2)
-        
-        self.ban_pick_champion(championName)
-
-
-
-    def auto_pick_champion(self,champion:list):
-        #NOTE: DOES NOT CHECK IF USER'S TURN IS ALREADY COMPLETED OR NOT
-        #TODO: ALLOW RECOMMENDED SELECTION IF ALL CHAMPIONS GIVEN BY USER IS BANNED
-        while self.champion_select_session().ok:
-            if self.current_champ_select_phase == 'pick':
-                if self.is_local_player_turn:
-                    championNames = self.champion_by_name(champion) #convert ids to names 
-                    pickableChamps= self.pickable_champions().json()
-                    for champ in championNames:
-                        if champ in pickableChamps:
-                            return self.ban_pick_champion(champ)
-                    
-            time.sleep(.2)
-        self.ban_pick_champion(champion)
-
-
-
 lol = LCU()
 auto = AutoFunctions()
+
+data = lol.queue_check().json()
+print(data)
