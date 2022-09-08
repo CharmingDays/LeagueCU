@@ -18,7 +18,9 @@ def check_and_install_requirements():
         time.sleep(5)
        
 
-check_and_install_requirements()
+# check_and_install_requirements()
+
+
 import requests as rq
 from requests import Response
 
