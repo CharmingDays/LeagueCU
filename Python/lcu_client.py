@@ -686,14 +686,14 @@ class AutoFunctions(LCU):
 
 
 
-    def auto_accept_match(self,champSelect=True) -> Response:
+    def auto_accept_match(self,endTime=10) -> Response:
         """
-        The function will not work if the lobby isn't in queue already and will stop when queue has been cancelled
+        Automatically accept a match when it's found until in champion selection phase.
+        -   endTime: amount of time to wait in minutes before automatically cancelling queue. Putting 0 will not cancel it.
         """
-        #SUMMONER NOT IN LOBBY
-        if self.queue_check().status_code == 404:
-            return False
-
+        stop =time.time()+ endTime* 60
+        while self.queue_check().status_code == 404:
+            time.sleep(1)
         while self.champion_select_session().ok is False:
             matchmaking_state = self.search_state()
             if matchmaking_state.json()['searchState'] == "Searching":
@@ -710,6 +710,3 @@ class AutoFunctions(LCU):
 
 lol = LCU()
 auto = AutoFunctions()
-
-data = lol.queue_check().json()
-print(data)
