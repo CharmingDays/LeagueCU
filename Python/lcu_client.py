@@ -5,6 +5,7 @@ from datetime import datetime
 import subprocess
 import sys
 import pkg_resources
+from typing import Union
 def check_and_install_requirements():
     #INSTALLS MISSING LIBS IF NOT FOUND
     required = {'requests'}
@@ -442,6 +443,14 @@ class Lobby(RiotFiles):
 
         return self.session.get(self.url+'/lol-lobby/v2/lobby')
 
+
+    def play_again(self):
+        #Play the same game mode again, returns back into lobby
+        url = self.url+'/lol-lobby/v2/play-again'
+        data = self.session.post(url)
+        return data
+
+
     def leave_lobby(self):
         """
         Leaves the lobby
@@ -629,20 +638,60 @@ class LiveGameData(RiotFiles):
     """
     Doc for this API can be found here: https://developer.riotgames.com/docs/lol#game-client-api_live-client-data-api
     """
+    # TODO: Return object with class methods to ease access to data
     def __init__(self) -> None:
         super().__init__()
+        self.game_data = {}
 
     @property
     def game_state(self) -> bool:
         #Checks if the local player's game has started
         try:
-            self.session.get('​https://127.0.0.1:2999/liveclientdata/activeplayername')
+            data =self.session.get('https://127.0.0.1:2999/liveclientdata/activeplayername')
             return True
         except rq.exceptions.InvalidSchema:
             return False
+    
+    def refresh_data(self) -> Union[dict,bool]:
+        data =self.session.get('https://127.0.0.1:2999/liveclientdata/allgamedata')
+        if not data.ok:
+            return False
 
- 
+        self.game_data = data.json()
+        return self.game_data
 
+    def player_names(self) -> list:
+        """
+        Get the names of all players
+        """
+        playerNames = [ ]
+        for _ in self.game_data['allPlayers']:
+            playerNames.append(self.game_data['allPlayers']['summonerName'])
+        return playerNames
+
+    def players_summoner_spells(self):
+        pass
+
+
+    def player_runes(self,summonerName):
+        pass
+
+    def player_scores(self) ->dict:
+        """
+        Get the scores for all players
+        """
+        #TODO: calculate KP
+        playerScores = {}
+        for _ in self.game_data['allPlayers']:
+            name = self.game_data['allPlayers']['summonerName']
+            scores = self.game_data['allPlayers']['score']
+            playerScores[name] = scores
+
+        return playerScores 
+
+    def player_skins(self):
+        pass
+        
 
 
 class LCU(Lobby,ChampSelect,Summoner,LiveGameData):
@@ -655,12 +704,6 @@ class LCU(Lobby,ChampSelect,Summoner,LiveGameData):
     def __init__(self):
         super().__init__()
 
-
-    def play_again(self):
-        #Play the same game mode again, returns back into lobby
-        url = self.url+'/lol-lobby/v2/play-again'
-        data = self.session.post(url)
-        return data
 
 
 class AutoFunctions(LCU):
