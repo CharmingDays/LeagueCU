@@ -664,7 +664,7 @@ class LiveGameData(RiotFiles):
         """
         Get the names of all players
         """
-        playerNames = [ ]
+        playerNames = []
         for _ in self.game_data['allPlayers']:
             playerNames.append(self.game_data['allPlayers']['summonerName'])
         return playerNames
@@ -691,7 +691,10 @@ class LiveGameData(RiotFiles):
 
     def player_skins(self):
         pass
-        
+
+
+
+
 
 
 class LCU(Lobby,ChampSelect,Summoner,LiveGameData):
@@ -755,3 +758,4 @@ class AutoFunctions(LCU):
 
 lol = LCU()
 auto = AutoFunctions()
+auto.auto_accept_match()
