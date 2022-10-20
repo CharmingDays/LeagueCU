@@ -3,25 +3,7 @@ import base64
 import os,json
 from datetime import datetime
 import subprocess
-import sys
-import pkg_resources
 from typing import Union
-def check_and_install_requirements():
-    #INSTALLS MISSING LIBS IF NOT FOUND
-    required = {'requests'}
-    installed = {pkg.key for pkg in pkg_resources.working_set}
-    missing = required - installed
-    if missing:
-        print("modules {} are missing".format(*missing))
-        python = sys.executable
-        subprocess.check_call([python,'-m','pip','install',*missing],stdout=subprocess.DEVNULL)
-        print("New modules were installed, please try restarting the script if it doesn't work.")
-        time.sleep(5)
-       
-
-# check_and_install_requirements()
-
-
 import requests as rq
 from requests import Response
 
