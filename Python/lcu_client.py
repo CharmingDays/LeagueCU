@@ -631,7 +631,7 @@ class LiveGameData(RiotFiles):
         try:
             data =self.session.get('https://127.0.0.1:2999/liveclientdata/activeplayername')
             return True
-        except rq.exceptions.InvalidSchema:
+        except (rq.exceptions.InvalidSchema,rq.exceptions.ConnectionError):
             return False
     
     def refresh_data(self) -> Union[dict,bool]:
@@ -716,18 +716,22 @@ class AutoFunctions(LCU):
 
 
 
-    def auto_accept_match(self,endTime=10) -> Response:
+    def auto_accept_match(self) -> Response:
         """
         Automatically accept a match when it's found until in champion selection phase.
-        -   endTime: amount of time to wait in minutes before automatically cancelling queue. Putting 0 will not cancel it.
         """
-        stop =time.time()+ endTime* 60
+        try:
+            self.start_match()
+        except:
+            pass
         while self.queue_check().status_code == 404:
             time.sleep(1)
+            print("Waiting for queue to start..")
         while self.champion_select_session().ok is False:
             matchmaking_state = self.search_state()
             if matchmaking_state.json()['searchState'] == "Searching":
                 while self.queue_check().json()['state'] == 'Invalid':
+                    # Waiting for match to be found
                     time.sleep(.3)
                 if self.queue_check().json()['playerResponse'] == "Accepted":
                     pass
@@ -736,8 +740,32 @@ class AutoFunctions(LCU):
 
         
         return matchmaking_state
+    def auto_accept_game(self) -> Response:
+        """
+        Auto accept matches until summoner in game.
+        """
+        try:
+            # attempt to start match
+            self.find_match()
+        except:
+            pass
+        
+        # Not in game yet
+        while not self.game_state:
+            while self.queue_check().status_code == 404:
+                # Wait for queue to start.
+                time.sleep(1)
+            while self.search_state().json()['searchState'] == 'Searching':
+                # in queue
+                if self.queue_check().json()['state'] == 'Invalid':
+                    # waiting for match to be found
+                    time.sleep(1)
+                else:
+                    self.accept_match()
+                    # match found
+        return self.game_state
 
 
 lol = LCU()
 auto = AutoFunctions()
-auto.auto_accept_match()
+auto.auto_accept_game()
