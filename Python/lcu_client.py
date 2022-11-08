@@ -363,13 +363,16 @@ class Summoner(RiotFiles):
     def __init__(self) -> None:
         super().__init__()
 
-
+    def summoner_info(self):
+        url = self.url+'/lol-summoner/v1/current-summoner'
+        data = self.session.get(url)
+        return data
 
     def change_icon(self,iconId):
         """
         Change your summoner icon.
         """
-        url = self.url+f"/lol-summoner/v1/current-summoner/icon"
+        url = self.url+"/lol-summoner/v1/current-summoner/icon"
         data = self.session.put(url,data=json.dumps({"profileIconId":iconId}))
 
         return data.ok
@@ -424,6 +427,43 @@ class Lobby(RiotFiles):
     def lobby_data(self):
 
         return self.session.get(self.url+'/lol-lobby/v2/lobby')
+
+
+    @property
+    def members_has_roles(self):
+        """
+        Checks to see if all members in lobby has roles selected.
+        True if all has roles else False
+        """
+        data = self.lobby_data().json()
+        for member in data['members']:
+            if member['firstPositionPreference'] == 'UNSELECTED' or member['secondPositionPreference'] == 'UNSELECTED':
+                return False
+        
+        return True
+
+
+    @property
+    def ready(self):
+        """
+        Lobby is ready to find match
+        """
+        return self.lobby_data().json()['canStartActivity']
+
+    
+    @property
+    def is_room_owner(self):
+        return self.lobby_data().json()['localMember']['isLeader']
+
+
+    @property
+    def summoner_positions(self) -> str:
+        """
+        @return
+        first,second
+        """
+        localMem= self.lobby_data().json()['localMember']
+        return localMem['firstPositionPreference'], localMem['secondPositionPreference']
 
 
     def play_again(self):
@@ -528,9 +568,21 @@ class Lobby(RiotFiles):
         return invite_data
 
 
-    def queue_check(self):
+    #---------------------MATCHMAKING----------------------
+
+
+    @property
+    def match_found(self):
+        data = self.search_state().json()['searchState']
+        if data == 'Found':
+            return True
+        return False
+
+
+    def ready_check(self):
         """
-        Check if a match has been found.
+        queue info
+
         """
         url = self.url+ "/lol-matchmaking/v1/ready-check"
         data= self.session.get(url)
@@ -539,7 +591,7 @@ class Lobby(RiotFiles):
     
     @property
     def in_queue(self):
-        data = self.queue_check()
+        data = self.ready_check()
         if data.ok:
             return True
 
@@ -549,18 +601,10 @@ class Lobby(RiotFiles):
         Invalid: Not in queue
         Searching: In queue for match.
         """
-        url = self.url+ "/lol-lobby/v2/lobby/matchmaking/search-state"
+        # url = self.url+ "/lol-lobby/v2/lobby/matchmaking/search-state"
+        url = self.url+ "/lol-matchmaking/v1/search"
         data = self.session.get(url)
         return data
-
-
-    def penalty_countdown(self):
-        #NOTE: THIS IS ONLY FOR LEAVERBUSTER AND LOWER QUEUE PRIO
-        # count down timer for match found??
-        #This function should return bool to indicate if there's a penalty.
-        url = self.url + '/lol-lobby/v2/lobby/matchmaking/search-state'
-        data = self.session.get(url).json()
-        return data['lowPriorityData']['penaltyTimeRemaining']
 
 
     def start_match(self):
@@ -606,7 +650,7 @@ class Lobby(RiotFiles):
         return data
 
     def queue_info(self):
-        queueState = self.queue_check()
+        queueState = self.ready_check()
         if queueState.status_code == 200:
             data = self.session.get(self.url+'/lol-matchmaking/v1/search')
             return data
@@ -634,6 +678,7 @@ class LiveGameData(RiotFiles):
         except (rq.exceptions.InvalidSchema,rq.exceptions.ConnectionError):
             return False
     
+
     def refresh_data(self) -> Union[dict,bool]:
         data =self.session.get('https://127.0.0.1:2999/liveclientdata/allgamedata')
         if not data.ok:
@@ -689,8 +734,6 @@ class LCU(Lobby,ChampSelect,Summoner,LiveGameData):
     def __init__(self):
         super().__init__()
 
-
-
 class AutoFunctions(LCU):
     """
     A class that uses the LCU class to implement  automatic functions
@@ -711,7 +754,6 @@ class AutoFunctions(LCU):
     def convert_time(self,seconds:int) -> int:
         if seconds >= 60:
             return f"{seconds/60} minutes"
-        
         return seconds
 
 
@@ -724,48 +766,76 @@ class AutoFunctions(LCU):
             self.start_match()
         except:
             pass
-        while self.queue_check().status_code == 404:
+        while self.ready_check().status_code == 404:
             time.sleep(1)
             print("Waiting for queue to start..")
         while self.champion_select_session().ok is False:
             matchmaking_state = self.search_state()
             if matchmaking_state.json()['searchState'] == "Searching":
-                while self.queue_check().json()['state'] == 'Invalid':
+                while self.ready_check().json()['state'] == 'Invalid':
                     # Waiting for match to be found
                     time.sleep(.3)
-                if self.queue_check().json()['playerResponse'] == "Accepted":
+                if self.ready_check().json()['playerResponse'] == "Accepted":
                     pass
                 else:
                     self.accept_match()
 
         
         return matchmaking_state
+
+    def wait_for_queue(self):
+        """
+        sleeps until queue starts
+        """
+        while self.in_queue is False:
+            time.sleep(1)
+        return self.in_queue
+    
+
+    def wait_for_match(self):
+        """
+        Waits for a match to be found
+        """
+        while self.match_found is False:
+            time.sleep(1)
+        return True
+
+    def wait_for_champion_select(self):
+        while self.champion_select_session().ok is False:
+            if self.match_found:
+                if self.search_state().json()['readyCheck']['playerResponse'] != "None":
+                    self.accept_match()
+
+            time.sleep(1)
+            
+
+
     def auto_accept_game(self) -> Response:
         """
         Auto accept matches until summoner in game.
         """
-        try:
-            # attempt to start match
+        
+        if self.ready and self.is_room_owner:
             self.find_match()
-        except:
-            pass
+        else:
+            self.wait_for_queue()
         
         # Not in game yet
         while not self.game_state:
-            while self.queue_check().status_code == 404:
-                # Wait for queue to start.
-                time.sleep(1)
-            while self.search_state().json()['searchState'] == 'Searching':
-                # in queue
-                if self.queue_check().json()['state'] == 'Invalid':
-                    # waiting for match to be found
-                    time.sleep(1)
-                else:
-                    self.accept_match()
-                    # match found
-        return self.game_state
+            self.wait_for_champion_select()
+            
+
+
+            
+
+
+def write_data(func):
+    data= func()
+    with open("D:\\Developer\\LeagueCU\\test\\{}.json".format(func.__name__),'w',encoding='utf-8') as file:
+        file.write(json.dumps(data.json()))
+
 
 
 lol = LCU()
 auto = AutoFunctions()
-auto.auto_accept_game()
+# auto.auto_accept_game()
