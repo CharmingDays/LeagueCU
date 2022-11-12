@@ -1,16 +1,12 @@
+import random
 import time
 import base64
 import os,json
 from datetime import datetime
 import subprocess
-from typing import Union
+from typing import Union,List
 import requests as rq
 from requests import Response
-
-
-
-
-
 
 
 class RiotFiles(object):
@@ -110,6 +106,9 @@ class ChampSelect(RiotFiles):
         return data
 
     def bannable_champions(self):
+        """
+        Returns a list of bannable champion ids
+        """
         url = self.url+"/lol-champ-select/v1/bannable-champion-ids"
         data = self.session.get(url)
         return data
@@ -130,6 +129,56 @@ class ChampSelect(RiotFiles):
         data= self.champion_select_session()
         return data.json()['localPlayerCellId']
 
+
+    @property
+    def player_position(self,cellId=None):
+        """
+        Position of local player or of given cellId
+        """
+        if cellId is None:
+            cellId = self.local_player_cell_id
+            return self.local_player_team_data['assignedPosition']
+
+        team = self.team_data()
+        for playerData in team:
+            if playerData['cellId'] == cellId:
+                return playerData['assignedPosition']
+            
+            
+
+    @property
+    def local_player_team_data(self):
+        """
+        Returns team data of local player
+        """
+        data = self.champion_select_session().json()
+        team = data['myTeam']
+        localId = self.local_player_cell_id
+        for i in team:
+            if i['cellId'] == localId:
+                return i
+
+    def team_data(self):
+        """
+        Returns the team data
+        """
+        data =self.champion_select_session().json()
+        team = data['myTeam']
+        return team
+
+
+    def hovered_champions(self):
+        """
+        Returns a list of champions that team has hovered
+        """
+        team = self.team_data()
+        champions= []
+        for playerData in team:
+            if playerData['championPickIntent'] !=0:
+                champions.append(playerData['championPickIntent'])
+        
+        return champions
+
     @property
     def local_player_cell_data(self):
         """
@@ -145,7 +194,14 @@ class ChampSelect(RiotFiles):
         return False
 
 
-
+    def get_phase_data(self,actorCellId:int,phase:str):
+        """
+        """
+        champData = self.champion_select_session().json()
+        for data in champData['actions']:
+            for actorData in data:
+                if actorData['actorCellId'] == actorCellId and actorData['type'] == phase:
+                    return actorData
 
     def hover_data(self):
         """
@@ -191,6 +247,9 @@ class ChampSelect(RiotFiles):
 
 
     def hover_champion(self,champion):
+        """
+        Hover the given champion
+        """
         #NOTE: CLICKING ON A CHAMPION MANUALLY WILL TAKE CONTROL OVER AND THIS WILL NOT WORK ANYMORE
         #NOTE: THIS SHOULD BE USED ONLY TO BAN/PICK CHAMPIONS
         hoverData = self.hover_data()
@@ -223,8 +282,7 @@ class ChampSelect(RiotFiles):
         return data
         
     def ban_pick_champion(self,champion) -> Response:
-        #TODO: MAKE IT SO HOVERED CHAMPION WON'T BE REMOVED 
-        #TODO: SHOULD CHECK IF CHAMPION TO LOCK IS SAME AS HOVERED CHAMPION, MAYBE INCLUDE CHAMPION_ID IN  PAYLOAD?
+        #TODO: MAKE IT SO HOVERED CHAMPION WON'T BE REMOVED
         """
         @return:
             - returns a tuple of the selectUrl and banData
@@ -234,7 +292,7 @@ class ChampSelect(RiotFiles):
 
         self.hover_champion(champion)
         url = self.url + f"/lol-champ-select/v1/session/actions/{self.local_player_cell_data['id']}/complete"
-        self.session.post(url)
+        return self.session.post(url)
 
     def champion_select_session(self):
         """
@@ -244,6 +302,18 @@ class ChampSelect(RiotFiles):
         url = self.url + "/lol-champ-select/v1/session"
         data = self.session.get(url)
         return data
+
+
+    @property
+    def in_champion_select(self):
+        """
+        Check if client is in champion select
+        Property alias of champion_select_session
+        """
+        if self.champion_select_session().ok:
+            return True
+        return False
+
 
     @property
     def current_phase(self):
@@ -258,7 +328,7 @@ class ChampSelect(RiotFiles):
         if data.ok:
             return data.json()['timer']['phase']
         
-        return data.status_code
+        return False
         
 
     @property
@@ -277,8 +347,8 @@ class ChampSelect(RiotFiles):
         checks if it's banning phase
         """
         data = self.champion_select_session()
-        data = data.json()
-        if data['timer']['phase'] == "BAN_PICK":
+        if data.ok and data.json()['timer']['phase'] == "BAN_PICK":
+            data = data.json()
             for phaseData in data['actions'][0]:
                 if phaseData['isInProgress']:
                     return True
@@ -293,10 +363,10 @@ class ChampSelect(RiotFiles):
         """
 
         data = self.champion_select_session()
-        data = data.json()
-        if data['timer']['phase'] == 'BAN_PICK':
+        if data.ok and data.json()['timer']['phase'] == 'BAN_PICK':
+            data = data.json()
             for phaseData in data['actions'][2:7]:
-                if phaseData['isInProgress']:
+                if phaseData[0]['isInProgress']:
                     return True
 
         return False
@@ -377,6 +447,11 @@ class Summoner(RiotFiles):
 
         return data.ok
 
+    def add_friend(self,summonerName:str) -> Response:
+        #TODO: MAKE ADD FRIEND FUNCTION
+        url = self.url+ ''
+        data = self.session.get(url,data=json.dumps({'name':summonerName}))
+        return data
 
     def export_friends(self,path=None):
         """
@@ -444,7 +519,7 @@ class Lobby(RiotFiles):
 
 
     @property
-    def ready(self):
+    def ready_to_start(self):
         """
         Lobby is ready to find match
         """
@@ -567,35 +642,50 @@ class Lobby(RiotFiles):
 
         return invite_data
 
-
-    #---------------------MATCHMAKING----------------------
-
+class Matchmaking(RiotFiles):
+    """
+    Matchmaking endpoints for the client
+    """
+    def __init__(self) -> None:
+        super().__init__()
 
     @property
-    def match_found(self):
+    def match_found(self) ->bool:
+        """
+        Checks if match is found
+        """
         data = self.search_state().json()['searchState']
-        if data == 'Found':
+        if data.ok and data == 'Found':
             return True
+
         return False
 
 
-    def ready_check(self):
+    def ready_check(self) -> Union[Response,bool]:
         """
         queue info
 
         """
         url = self.url+ "/lol-matchmaking/v1/ready-check"
         data= self.session.get(url)
-        return data
+        if data.ok:
+            return data
+
+        return False
 
     
     @property
-    def in_queue(self):
+    def in_queue(self) ->bool:
+        """
+        Checks if client is in queue. 
+        """
+        #TODO: Check vs search_state
         data = self.ready_check()
         if data.ok:
             return True
+        return False
 
-    def search_state(self) -> Response:
+    def search_state(self) -> Union[Response,bool]:
         """
         Check the state of the match search
         Invalid: Not in queue
@@ -604,25 +694,33 @@ class Lobby(RiotFiles):
         # url = self.url+ "/lol-lobby/v2/lobby/matchmaking/search-state"
         url = self.url+ "/lol-matchmaking/v1/search"
         data = self.session.get(url)
-        return data
+        if data.ok:
+            return data
+
+        return False
 
 
-    def start_match(self):
-        #alias for match
+    def start_match(self) ->Union[Response,bool]:
+        """
+        alias for match
+        """
         self.find_match()
 
 
-    def leave_queue(self):
+    def leave_queue(self) ->Union[Response,bool]:
         """
         Leave the current queue 
         """
         url = self.url+"/lol-lobby/v2/lobby/matchmaking/search"
         data = self.session.delete(url)
-        return data
+        if data.ok:
+            return data
+
+        return False
 
 
 
-    def find_match(self):
+    def find_match(self) ->Union[Response,bool]:
         """
         Start the queue for the lobby.
 
@@ -633,21 +731,30 @@ class Lobby(RiotFiles):
         """
         url = self.url+"/lol-lobby/v2/lobby/matchmaking/search"
         data = self.session.post(url)
-        return data
+        if data.ok:
+            return data
+
+        return False
 
 
-    def decline_match(self):
+    def decline_match(self) -> Union[Response,bool]:
         url = self.url + "/lol-matchmaking/v1/ready-check/decline"
         data = self.session.post(url)
-        return data
+        if data.ok:
+            return data
 
+        return False
 
+    
 
-    def accept_match(self):
+    def accept_match(self) -> Union[Response,bool]:
         #accept match when found
         url = self.url+"/lol-matchmaking/v1/ready-check/accept"
         data  = self.session.post(url)
-        return data
+        if data.ok:
+            return data
+
+        return False
 
     def queue_info(self):
         queueState = self.ready_check()
@@ -674,6 +781,7 @@ class LiveGameData(RiotFiles):
         #Checks if the local player's game has started
         try:
             data =self.session.get('https://127.0.0.1:2999/liveclientdata/activeplayername')
+            self.game_data = data.json()
             return True
         except (rq.exceptions.InvalidSchema,rq.exceptions.ConnectionError):
             return False
@@ -716,15 +824,24 @@ class LiveGameData(RiotFiles):
 
         return playerScores 
 
-    def player_skins(self):
+    def random_skin(self):
+        #TODO: select random skin for champion
+        pass
+
+
+    def hover_random_champion(self):
+        #TODO: hover a random champion
+        pass
+
+
+    def pick_random_champion(self):
+        #TODO: random champion
         pass
 
 
 
 
-
-
-class LCU(Lobby,ChampSelect,Summoner,LiveGameData):
+class LCU(Lobby,ChampSelect,Summoner,LiveGameData,Matchmaking):
     """
     Docs for LCU can be found here: 
         https://lcu.vivide.re/
@@ -733,6 +850,9 @@ class LCU(Lobby,ChampSelect,Summoner,LiveGameData):
     """
     def __init__(self):
         super().__init__()
+
+
+
 
 class AutoFunctions(LCU):
     """
@@ -758,76 +878,74 @@ class AutoFunctions(LCU):
 
 
 
-    def auto_accept_match(self) -> Response:
+    def auto_champion_selection(self,champPicks:List[str],champBan:List[str]) -> Response:
         """
-        Automatically accept a match when it's found until in champion selection phase.
+        Automatically select and lock in champion
+        -Hover champion
+        -ban champion
+        -lock in champion
+
         """
-        try:
-            self.start_match()
-        except:
-            pass
-        while self.ready_check().status_code == 404:
+        banAble = self.bannable_champions().json()
+        actorId = self.local_player_cell_id
+        while not self.game_state:
+            if not self.in_champion_select:
+                # prevent non scribble error.
+                continue
+            if self.is_planning_phase and self.local_player_team_data['championPickIntent'] == 0: #TODO: CHECK TO SEE IF USER ALREADY HOVERED CHAMPION
+                #NOTE: PICK INTENT PHASE(PLANNING PHASE)
+                self.hover_champion(champPicks[0])
+            if self.is_banning_phase and self.get_phase_data(actorId,'ban')['completed'] is False:
+                #NOTE: BANNING PHASE
+                #ban phase, user has not banned
+                hoveredChampions = self.hovered_champions()
+                for champ in champBan:
+                    champId =self.champion_by_name(champ)
+                    if champId in banAble and champId not in hoveredChampions:
+                        ban = self.ban_pick_champion(champ)
+                        if ban.ok:
+                            # ban successful
+                            break
+
+            if self.is_picking_phase and self.get_phase_data(actorId,'pick')['completed'] is False and self.is_local_player_turn:
+                # Checks phase,user's turn, action status(turn completed?)
+                #NOTE: PICKING PHASE - USER'S TURN
+                for champ in champPicks:
+                    pick = self.ban_pick_champion(champ)
+                    if pick.ok:
+                        # action successful
+                        break
+                        
             time.sleep(1)
-            print("Waiting for queue to start..")
-        while self.champion_select_session().ok is False:
-            matchmaking_state = self.search_state()
-            if matchmaking_state.json()['searchState'] == "Searching":
-                while self.ready_check().json()['state'] == 'Invalid':
-                    # Waiting for match to be found
-                    time.sleep(.3)
-                if self.ready_check().json()['playerResponse'] == "Accepted":
-                    pass
-                else:
-                    self.accept_match()
-
-        
-        return matchmaking_state
-
-    def wait_for_queue(self):
-        """
-        sleeps until queue starts
-        """
-        while self.in_queue is False:
-            time.sleep(1)
-        return self.in_queue
-    
-
-    def wait_for_match(self):
-        """
-        Waits for a match to be found
-        """
-        while self.match_found is False:
-            time.sleep(1)
-        return True
-
-    def wait_for_champion_select(self):
-        while self.champion_select_session().ok is False:
-            if self.match_found:
-                if self.search_state().json()['readyCheck']['playerResponse'] != "None":
-                    self.accept_match()
-
-            time.sleep(1)
-            
 
 
-    def auto_accept_game(self) -> Response:
+    def auto_accept_game(self,picks=None,bans=None) -> Response:
         """
         Auto accept matches until summoner in game.
+        #NOTE: DODGE NOT TESTED
         """
-        
-        if self.ready and self.is_room_owner:
-            self.find_match()
-        else:
-            self.wait_for_queue()
-        
         # Not in game yet
+        if self.is_room_owner and self.ready_to_start:
+            self.find_match()
+
         while not self.game_state:
-            self.wait_for_champion_select()
-            
+            #wait for game to start
+            if not self.in_champion_select:
+                #waiting to be in champ select
+                if self.in_queue:
+                    #waiting in queue
+                    if self.match_found and self.ready_check().json()['playerResponse'] != "Accepted":
+                        #match found and accepted
+                        self.accept_match()
 
+            if self.in_champion_select:
+                if picks is None or bans is None:
+                    continue
+                else:
+                    self.auto_champion_selection(picks,bans)
+            time.sleep(1)
 
-            
-
+        return self.game_data
 
 def write_data(func):
     data= func()
@@ -838,4 +956,6 @@ def write_data(func):
 
 lol = LCU()
 auto = AutoFunctions()
-# auto.auto_accept_game()
+picks = ['missfortune','jinx']
+bans = ['blitzcrank','twitch']
+auto.auto_accept_game(picks,bans)
