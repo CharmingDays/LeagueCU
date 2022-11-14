@@ -105,6 +105,17 @@ class ChampSelect(RiotFiles):
         data = self.session.get(url)
         return data
 
+
+    def hovered_ban(self):
+        """
+        Return the current hovered ban intent champion ID. 0 if none
+        """
+        local = self.local_player_cell_data
+        if local:
+            return local['championId']
+
+        return False
+
     def bannable_champions(self):
         """
         Returns a list of bannable champion ids
@@ -215,19 +226,6 @@ class ChampSelect(RiotFiles):
                     return inner
 
 
-    def hovered_champions(self):
-        """
-        Returns a list of champions that are hovered by allies
-        """
-        data = self.champion_select_session().json()
-        hoveredChampions = []
-        for actions in data['actions']:
-            for actionData in actions:
-                if actionData['type'] == 'pick' and actionData['completed'] is False:
-                    if actionData['championId'] != 0: #champion intent is shown
-                        hoveredChampions.append(actionData['championId'])
-
-        return hoveredChampions
     @property
     def selected_champion(self):
         """
@@ -503,7 +501,6 @@ class Lobby(RiotFiles):
 
         return self.session.get(self.url+'/lol-lobby/v2/lobby')
 
-
     @property
     def members_has_roles(self):
         """
@@ -654,8 +651,8 @@ class Matchmaking(RiotFiles):
         """
         Checks if match is found
         """
-        data = self.search_state().json()['searchState']
-        if data.ok and data == 'Found':
+        data = self.search_state()
+        if data.ok and  data.json()['searchState'] == 'Found':
             return True
 
         return False
@@ -841,18 +838,81 @@ class LiveGameData(RiotFiles):
 
 
 
-class LCU(Lobby,ChampSelect,Summoner,LiveGameData,Matchmaking):
+
+class PostMatch(RiotFiles):
+    def __init__(self) -> None:
+        super().__init__()
+
+
+    def get_honor_players(self) -> Union[list,bool]:
+        url = '/lol-honor-v2/v1/ballot'
+        data = self.session.get(self.url+url)
+        if data.ok:
+            return data.json()['eligiblePlayers']
+        return False
+
+
+    def find_honor_player(self,summonerName):
+        """ 
+        Return player Id in honor ballot by name
+        """
+        data = self.get_honor_players()
+        if data:
+            for player in data:
+                if player['summonerName'] == summonerName:
+                    return player['summonerId']
+        return False
+
+    def honor_player(self,summoner:Union[int,str],honorType="heart") -> Union[Response,bool]:
+        """
+        honor a player given summoner name
+        """
+        ballot= self.honor_player()
+        url = '/lol-honor-v2/v1/honor-player'
+        if ballot:
+            data= self.session(self.url+url,data=json.dumps({"gameId": 0,"honorCategory": "string","summonerId": 0}))
+            if data.ok:
+                return data
+
+
+        return False
+             
+
+class Runes(RiotFiles):
+    def __init__(self) -> None:
+        super().__init__()
+
+
+    def __summoner_info(self) -> Union[dict,bool]:
+        url = self.url+'/lol-summoner/v1/current-summoner'
+        data = self.session.get(url)
+
+        if data.ok:
+            return data.json()
+        return False
+
+
+    def get_runes(self) -> Union[dict,bool]:
+        summoner = self.__summoner_info()
+        if summoner:
+            summonerId = summoner['summonerId']
+            url = f"/lol-perks/v1/pages"
+            data = self.session.get(self.url+url)
+            if data.ok:
+                return data.json()
+
+        return False
+
+
+class LCU(Lobby,ChampSelect,Summoner,LiveGameData,Matchmaking,PostMatch,Runes):
     """
-    Docs for LCU can be found here: 
+    Docs for LCU can be found here
         https://lcu.vivide.re/
         https://github.com/Remlas/lolcup-tools/blob/master/AllRequests.txt
 
     """
     def __init__(self):
         super().__init__()
-
-
-
 
 class AutoFunctions(LCU):
     """
@@ -870,11 +930,6 @@ class AutoFunctions(LCU):
     """
     def __init__(self):
         super().__init__()
-
-    def convert_time(self,seconds:int) -> int:
-        if seconds >= 60:
-            return f"{seconds/60} minutes"
-        return seconds
 
 
 
@@ -904,6 +959,8 @@ class AutoFunctions(LCU):
                     if champId in banAble and champId not in hoveredChampions:
                         ban = self.ban_pick_champion(champ)
                         if ban.ok:
+                            time.sleep(1)
+                            self.hover_champion(self.local_player_team_data['championPickIntent'])
                             # ban successful
                             break
 
@@ -911,12 +968,16 @@ class AutoFunctions(LCU):
                 # Checks phase,user's turn, action status(turn completed?)
                 #NOTE: PICKING PHASE - USER'S TURN
                 for champ in champPicks:
-                    pick = self.ban_pick_champion(champ)
+                    localPlayerHover = self.local_player_team_data
+                    if localPlayerHover['championPickIntent'] != self.champion_by_name(champ):
+                        pick = self.ban_pick_champion(localPlayerHover['championPickIntent'])
+                    else:
+                        pick = self.ban_pick_champion(champ)
                     if pick.ok:
                         # action successful
                         break
                         
-            time.sleep(1)
+            time.sleep(.5)
 
 
     def auto_accept_game(self,picks=None,bans=None) -> Response:
@@ -947,15 +1008,18 @@ class AutoFunctions(LCU):
 
         return self.game_data
 
+
 def write_data(func):
     data= func()
     with open("D:\\Developer\\LeagueCU\\test\\{}.json".format(func.__name__),'w',encoding='utf-8') as file:
-        file.write(json.dumps(data.json()))
+        if type(data) == list:
+            data = {"data":data}
+        else:
+            data = data.json()
+        file.write(json.dumps(data))
 
 
 
 lol = LCU()
 auto = AutoFunctions()
-picks = ['missfortune','jinx']
-bans = ['blitzcrank','twitch']
-auto.auto_accept_game(picks,bans)
+# write_data(lol.champion_select_session)
