@@ -1,4 +1,3 @@
-import random
 import time
 import base64
 import os,json
@@ -20,28 +19,6 @@ class RiotFiles(object):
         self.lockfile()
         self.riotgames_SSL()
         self.session.headers = {'Authorization':f"Basic {self.token}",'Accept': 'application/json'}
-        self.champion_names = {}
-        self.get_champion_names()
-
-
-    def get_champion_names(self):
-        #TODO: use data dragon champions instead -> http://ddragon.leagueoflegends.com/cdn/{patch_version}/data/en_US/champion.json
-        data = rq.get('https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/88e3bbaf1b095fd2aac74189a80d2b5f41bd859b/champid.json')
-        if data.ok:
-            self.champion_names = data.json()
-            return True
-        return False
-
-
-    def refresh_champion_names(self,newUrl):
-        data = rq.get(newUrl)
-        if data.ok:
-            self.champion_names = data.json()
-            return True
-
-        return False
-        
-
 
     def lockfile(self,filePath:str=None):
         """
@@ -55,7 +32,7 @@ class RiotFiles(object):
 
         if not os.path.exists(defaultLockfile):
             # lock file doesn't exist in default defaultLockfile path
-            raise FileExistsError(defaultLockfile)
+            raise FileExistsError("lockfile not found, please run and login the lol client.")
         else:
             defaultLockfile = open(defaultLockfile,'r')
         rawData = defaultLockfile.read()
@@ -279,7 +256,7 @@ class ChampSelect(RiotFiles):
         data = self.session.patch(selectUrl,data=json.dumps(phaseData)) #Hover the champion to ban/pick
         return data
         
-    def ban_pick_champion(self,champion) -> Response:
+    def pick_champion(self,champion) -> Response:
         #TODO: MAKE IT SO HOVERED CHAMPION WON'T BE REMOVED
         """
         @return:
@@ -291,6 +268,15 @@ class ChampSelect(RiotFiles):
         self.hover_champion(champion)
         url = self.url + f"/lol-champ-select/v1/session/actions/{self.local_player_cell_data['id']}/complete"
         return self.session.post(url)
+
+    def ban_champion(self,champion:Union[str,int]) -> Union[Response,dict]:
+        if type(champion) != int:
+            champion = self.champion_by_name(champion)
+        
+        self.select_champion(champion)
+        url = self.url + f"/lol-champ-select/v1/session/actions/{self.local_player_cell_data['id']}/complete"
+        return self.session.post(url)
+
 
     def champion_select_session(self):
         """
@@ -773,6 +759,7 @@ class LiveGameData(RiotFiles):
         super().__init__()
         self.game_data = {}
 
+
     @property
     def game_state(self) -> bool:
         #Checks if the local player's game has started
@@ -903,8 +890,30 @@ class Runes(RiotFiles):
 
         return False
 
+class Chat(RiotFiles):
+    def __init__(self) -> None:
+        super().__init__()
 
-class LCU(Lobby,ChampSelect,Summoner,LiveGameData,Matchmaking,PostMatch,Runes):
+
+    def find_summoner(self,name:str):
+        url = f'/lol-summoner/v1/summoners?name={name}'
+        data =  self.session.get(self.url+url)
+        return data
+
+
+    def send_message(self,summonerName,message:str):
+        """
+        Send a message to a friend
+        """
+        puuid = self.find_summoner(summonerName).json()['puuid']
+        targetId = f'{puuid}@na1.pvp.net'
+        url = self.url+f'/lol-chat/v1/conversations/{targetId}/messages'
+        data = {"body": message,"id": targetId}
+        return self.session.post(url,data=json.dumps(data))
+
+
+
+class LCU(Lobby,ChampSelect,Summoner,LiveGameData,Matchmaking,PostMatch,Runes,Chat):
     """
     Docs for LCU can be found here
         https://lcu.vivide.re/
@@ -957,10 +966,8 @@ class AutoFunctions(LCU):
                 for champ in champBan:
                     champId =self.champion_by_name(champ)
                     if champId in banAble and champId not in hoveredChampions:
-                        ban = self.ban_pick_champion(champ)
+                        ban = self.ban_champion(champ)
                         if ban.ok:
-                            time.sleep(1)
-                            self.hover_champion(self.local_player_team_data['championPickIntent'])
                             # ban successful
                             break
 
@@ -969,15 +976,15 @@ class AutoFunctions(LCU):
                 #NOTE: PICKING PHASE - USER'S TURN
                 for champ in champPicks:
                     localPlayerHover = self.local_player_team_data
-                    if localPlayerHover['championPickIntent'] != self.champion_by_name(champ):
-                        pick = self.ban_pick_champion(localPlayerHover['championPickIntent'])
+                    if localPlayerHover['championPickIntent'] != self.champion_by_name(champ) and localPlayerHover['championPickIntent'] != 0:
+                        pick = self.pick_champion(localPlayerHover['championPickIntent'])
                     else:
-                        pick = self.ban_pick_champion(champ)
+                        pick = self.pick_champion(champ)
                     if pick.ok:
                         # action successful
                         break
                         
-            time.sleep(.5)
+            time.sleep(.1)
 
 
     def auto_accept_game(self,picks=None,bans=None) -> Response:
@@ -1004,12 +1011,14 @@ class AutoFunctions(LCU):
                     continue
                 else:
                     self.auto_champion_selection(picks,bans)
-            time.sleep(1)
+            time.sleep(.1)
 
         return self.game_data
 
-
 def write_data(func):
+    """
+    Simple function to write the json contents of the data into my file dir
+    """
     data= func()
     with open("D:\\Developer\\LeagueCU\\test\\{}.json".format(func.__name__),'w',encoding='utf-8') as file:
         if type(data) == list:
@@ -1020,6 +1029,3 @@ def write_data(func):
 
 
 
-lol = LCU()
-auto = AutoFunctions()
-# write_data(lol.champion_select_session)
