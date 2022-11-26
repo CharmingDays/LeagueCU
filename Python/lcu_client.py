@@ -6,6 +6,7 @@ import subprocess
 from typing import Union,List
 import requests as rq
 from requests import Response
+from lcu_driver import Connector
 
 
 class RiotFiles(object):
@@ -879,7 +880,7 @@ class Runes(RiotFiles):
         return False
 
 
-    def get_runes(self) -> Union[dict,bool]:
+    def get_rune_list(self) -> Union[dict,bool]:
         summoner = self.__summoner_info()
         if summoner:
             summonerId = summoner['summonerId']
@@ -889,6 +890,37 @@ class Runes(RiotFiles):
                 return data.json()
 
         return False
+
+    def get_rune(self,runeId):
+        url = self.url+f'/lol-perks/v1/pages/{runeId}'
+        data= self.session.get(url)
+        if data.ok:
+            return data.json()
+
+        return False
+
+    def delete_rune(self,id):
+        url = self.url+f'/lol-perks/v1/pages/{id}'
+        data= self.session.delete(url)
+        if data.ok:
+            return data.text
+        return False
+
+    def update_rune(self,id,champion=None):
+        currentRune = self.get_rune(id)
+        if champion != None:
+            #TODO: Set it equal to champion name style. Ex: BelVeth, KogMaw, KaiSa,
+            currentRune['name'] = f'Local: {champion.lower().title()}'
+        primaryStyleId = 8200
+        subStyleId =8300
+        currentRune['subStyleId'] = subStyleId
+        currentRune['primaryStyleId'] = primaryStyleId
+        selectedPerkIds = [8214,8226,8210,8237,8345,8347,5008,5008,5002]
+        currentRune['selectedPerkIds'] = selectedPerkIds
+        url = self.url+f'/lol-perks/v1/pages'
+        self.delete_rune(id)
+        data = self.session.post(url,data=json.dumps(currentRune))
+        return data.json
 
 class Chat(RiotFiles):
     def __init__(self) -> None:
@@ -925,8 +957,9 @@ class LCU(Lobby,ChampSelect,Summoner,LiveGameData,Matchmaking,PostMatch,Runes,Ch
 
 class AutoFunctions(LCU):
     """
+    NOTE: This is not recommended to automate the client, you should use the `lcu_driver` and subscribe to the endpoints instead.
+
     A class that uses the LCU class to implement  automatic functions
-    
     CURRENT FEATURES:
         - auto_accept:
             -- automatically start queue or wait until queue starts and accepts the match for you until in champion select.
@@ -939,8 +972,6 @@ class AutoFunctions(LCU):
     """
     def __init__(self):
         super().__init__()
-
-
 
     def auto_champion_selection(self,champPicks:List[str],champBan:List[str]) -> Response:
         """
@@ -1015,17 +1046,19 @@ class AutoFunctions(LCU):
 
         return self.game_data
 
-def write_data(func):
+def write_data(func,*args):
     """
     Simple function to write the json contents of the data into my file dir
     """
-    data= func()
+    if args:
+        data= func(*args)
+    else:
+        data = func()
     with open("D:\\Developer\\LeagueCU\\test\\{}.json".format(func.__name__),'w',encoding='utf-8') as file:
         if type(data) == list:
             data = {"data":data}
-        else:
+        elif type(data) != dict:
             data = data.json()
         file.write(json.dumps(data))
-
 
 
