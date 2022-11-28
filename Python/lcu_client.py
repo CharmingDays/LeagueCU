@@ -1,14 +1,11 @@
-import time
-import base64
-import os,json
-from datetime import datetime
-import subprocess
-from typing import Union,List
 import requests as rq
+from datetime import datetime
 from requests import Response
 from lcu_driver import Connector
-
-
+import subprocess
+import base64
+import os,json
+from typing import Union,List
 class RiotFiles(object):
     """
     Class for dealing with riotgames' files and other external files for LCU
@@ -906,6 +903,12 @@ class Runes(RiotFiles):
             return data.text
         return False
 
+
+    def export_runes(self,path='',fileName='runes'):
+        with open(f"{path}\\{fileName}.json",'w+',encoding='utf-8') as file:
+            data = json.dumps(file.read())
+
+
     def update_rune(self,id,champion=None):
         currentRune = self.get_rune(id)
         if champion != None:
@@ -921,6 +924,10 @@ class Runes(RiotFiles):
         self.delete_rune(id)
         data = self.session.post(url,data=json.dumps(currentRune))
         return data.json
+
+
+
+
 
 class Chat(RiotFiles):
     def __init__(self) -> None:
@@ -1060,5 +1067,6 @@ def write_data(func,*args):
         elif type(data) != dict:
             data = data.json()
         file.write(json.dumps(data))
+
 
 
