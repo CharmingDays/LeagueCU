@@ -1,0 +1,83 @@
+{
+    "actions": [
+        [
+            {
+                "actorCellId": 0,
+                "championId": 0,
+                "completed": false,
+                "id": 1,
+                "isAllyAction": true,
+                "isInProgress": true,
+                "pickTurn": 1,
+                "type": "pick"
+            }
+        ]
+    ],
+    "allowBattleBoost": false,
+    "allowDuplicatePicks": false,
+    "allowLockedEvents": false,
+    "allowRerolling": false,
+    "allowSkinSelection": true,
+    "bans": {
+        "myTeamBans": [],
+        "numBans": 0,
+        "theirTeamBans": []
+    },
+    "benchChampions": [],
+    "benchEnabled": false,
+    "boostableSkinCount": 1,
+    "chatDetails": {
+        "mucJwtDto": {
+            "channelClaim": "",
+            "domain": "",
+            "jwt": "",
+            "targetRegion": ""
+        },
+        "multiUserChatId": "c1~4cf9e7a9e5129c690bc9706099d883bae5f0f0a5",
+        "multiUserChatPassword": "gAXJEJSFnXgPfDLi"
+    },
+    "counter": -1,
+    "entitledFeatureState": {
+        "additionalRerolls": 0,
+        "unlockedSkinIds": []
+    },
+    "gameId": 0,
+    "hasSimultaneousBans": false,
+    "hasSimultaneousPicks": true,
+    "isCustomGame": true,
+    "isSpectating": false,
+    "localPlayerCellId": 0,
+    "lockedEventIndex": -1,
+    "myTeam": [
+        {
+            "assignedPosition": "",
+            "cellId": 0,
+            "championId": 0,
+            "championPickIntent": 0,
+            "entitledFeatureType": "",
+            "nameVisibilityType": "",
+            "obfuscatedPuuid": "",
+            "obfuscatedSummonerId": 0,
+            "puuid": "",
+            "selectedSkinId": 0,
+            "spell1Id": 1,
+            "spell2Id": 3,
+            "summonerId": 88129331,
+            "team": 1,
+            "wardSkinId": -1
+        }
+    ],
+    "pickOrderSwaps": [],
+    "recoveryCounter": 0,
+    "rerollsRemaining": 0,
+    "skipChampionSelect": false,
+    "theirTeam": [],
+    "timer": {
+        "adjustedTimeLeftInPhase": 89593,
+        "internalNowInEpochMs": 1695709494725,
+        "isInfinite": false,
+        "phase": "BAN_PICK",
+        "totalTimeInPhase": 92593
+    },
+    "trades": []
+}
