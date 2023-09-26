@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>LCU Settings</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+        <style>
+            .settings-selection {
+                font-size: 200%;
+            }
+            .title h1{
+                text-align: center;
+                font-size: 300%;
+            }
+        </style>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+        <script>
+            function sendRequest(value,check) {
+                $.ajax({
+                    type:'POST',
+                    url:`/updateLcuSettings/{"${value}":"${check}"}`,
+                    contentType:'application/json;charset=UTF-8',
+                    });
+            }
+            function updateLcuSettings(doc){
+                const check = doc.checked === true ? "checked": "";
+                // console.log(doc,doc.value);
+                sendRequest(doc.value,check)
+            }
+        </script>
+    </head>
+    <body>
+        <div class="title">
+            <h1>LCU Settings</h1>
+        </div>
+        <div class="settings-selection">
+            <div class="form-check form-switch">
+                <input onclick="updateLcuSettings(this)" class="form-check-input" type="checkbox" role="switch" value="match" id="autoAccept" {{match}}>
+                <label class="form-check-label" for="autoAccept">Auto Accept Match</label>
+              </div>
+              <div class="form-check form-switch">
+                <input onclick="updateLcuSettings(this)" class="form-check-input" type="checkbox" role="switch" value="runes" id="autoRunes" {{runes}}>
+                <label class="form-check-label" for="autoRunes">Auto Runes</label>
+              </div>
+              <!-- <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckDisabled" disabled>
+                <label class="form-check-label" for="flexSwitchCheckDisabled">Disabled switch checkbox input</label>
+              </div> -->
+              <!-- <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckCheckedDisabled" checked disabled>
+                <label class="form-check-label" for="flexSwitchCheckCheckedDisabled">Disabled checked switch checkbox input</label>
+              </div> -->
+        </div>
+        <footer></footer>
+    </body>
+</html>

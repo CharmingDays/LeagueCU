@@ -8,6 +8,7 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+*.spec
 Friend_list/
 .Python
 build/
