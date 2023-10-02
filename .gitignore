@@ -3,12 +3,12 @@ __pycache__/
 .vscode/
 *.py[cod]
 *$py.class
+test*.*
 
 # C extensions
 *.so
 
 # Distribution / packaging
-*.spec
 Friend_list/
 .Python
 build/
