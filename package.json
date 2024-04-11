@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "lcu-connector": "^2.1.3"
+  }
+}

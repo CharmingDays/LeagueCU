@@ -1,0 +1,43 @@
+{
+    "lobby": {
+        "auto_accept": true,
+        "auto_start": true,
+        "chat_control": false,
+        "accept_delay":[3,5]
+    },
+    "champ_select": {
+        "ban_delay":[3],
+        "pick_delay":[2],
+        "declare_delay":[5],
+        "auto_bans": [
+            "blitzcrank",
+            "zyra",
+            "twitch",
+            "senna"
+        ],
+        "auto_picks": {
+            "bottom": [
+                "jinx",
+                "kogmaw",
+                "vayne",
+                "kaisa"
+            ],
+            "middle": [
+                "karma",
+                "twistedfate"
+            ],
+            "support": [
+                "karma",
+                "lux",
+                "thresh"
+            ],
+            "top": [
+                "malphite"
+            ]
+        }
+    },
+    "post_game": {
+        "honor": "puuid to honor/false to skip",
+        "play_again": false
+    }
+}
