@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import aiohttp
@@ -10,11 +11,25 @@ from collections import deque
 
 
 
+
+"""
+actions: List
+    [
+    [] -- > ban
+    [] -- > ban reveals
+    [] -- > pick (1st pick)
+    [] -- > pick (2 pick)
+    [] -- > pick (2 pick)
+    [] -- > pick (2 pick)
+    [] -- > pick (2 pick)
+    [] -- > pick (last pick)
+    ]
+"""
 class ChampionSession(object):
-    """Class for handling champion select session data"""
+    """Class for handling champion select event data"""
     def __init__(self) -> None:
         self.data:typing.Dict
-        self.champData:typing.Dict[str,str] = self.get_champions()
+        self.champ_identities:typing.Dict[str,str] = self.get_champions()
         self.session:socketConnection
 
 
@@ -50,8 +65,9 @@ class ChampionSession(object):
             return json.loads(champs)
     
 
-    def update_data(self,connection:socketConnection,event:socketResponse)->bool:
-        """Updates the session data
+    def update_data(self,connection:socketConnection,event:socketResponse)-> None:
+        """
+        Updates the session data
         Args:
             data (socketResponse): The websocket response data
         """
@@ -60,7 +76,7 @@ class ChampionSession(object):
             
         
     @property
-    def session_phase(self) ->str:
+    def event_phase(self) ->str:
         if self.data:
             return self.data['timer']['phase']
 
@@ -72,9 +88,11 @@ class ChampionSession(object):
 
     @property
     def playerData(self) ->typing.Dict:
-        for playerData in self.data['myTeam']:
-            if playerData['cellId'] == self.localPlayerCellId:
-                return playerData
+        for player in self.data['myTeam']:
+            if player['cellId'] == self.localPlayerCellId:
+                return player
+            
+        return {}
 
 
     @property
@@ -111,13 +129,17 @@ class ChampionSession(object):
 
 
 
-    def is_player_turn(self) -> typing.Union[bool,typing.Dict]:
+    def is_player_turn(self) ->bool|typing.Dict:
         """Returns the player's action data dict if true
 
         Returns:
-            typing.Union[bool,typing.Dict]: The player action data
+            bool | typing.Dict: The player action data or False if no data
         """
-        for actionType in self.data['actions']:
+        #NOTE actionIndex: 0 is ban, 1 is ban reveals, >= 2 is pick
+        for index,actionType in enumerate(self.data['actions']):
+            if index < 2 and self.event_phase == "BAN_PICK":
+                #Skip iteration over completed actions
+                continue
             for action in actionType:
                 if action['actorCellId'] == self.localPlayerCellId and not action['completed'] and action['isInProgress']:
                     return action
@@ -135,21 +157,26 @@ class ChampionSession(object):
             typing.Generator: Generator of champion ids
         """
         if isinstance(champ,int):
-            champs = {value:key for key,value in self.champData.items()}
+            champs = {champ_id:champ_name for champ_name,champ_id in self.champ_identities.items()}
             if champ in champs:
                 return champ
             return 0
-        if isinstance(champ,str):
-            return self.champData.get(champ,0)
+        elif isinstance(champ,str):
+            return self.champ_identities.get(champ,0)
+        else:
+            raise TypeError("Must be str or int")
+        
 
-    async def declare_champion(self,champ:str|int):
+    async def hover_champion(self,champ:str|int):
         champId = self.champ_identity(champ)
-        declareData = None
-        for actionType in self.data['actions']:
-            for action in actionType:
-                if action['actorCellId'] == self.localPlayerCellId and not action['completed'] and action['type'] == "pick":
-                    declareData=action
-                    break
+        declareData = {}
+        for index,actionType in enumerate(self.data['actions']):
+            if index >= 2:
+                #Iterate over pick actions only
+                for action in actionType:
+                    if action['actorCellId'] == self.localPlayerCellId and not action['completed'] and action['type'] == "pick":
+                        declareData=action
+                        break
 
         if not declareData:
             return
@@ -158,7 +185,6 @@ class ChampionSession(object):
         uri = f'/lol-champ-select/v1/session/actions/{declareData["id"]}'
         await self.session.request('PATCH',uri,data=declareData)
         
-
 
     async def select_champ(self,champ:str|int):
         """Selects the champion
@@ -176,24 +202,6 @@ class ChampionSession(object):
         await self.session.request("PATCH",uri,data=actionData)
 
 
-    async def lock_champ_in(self,champ:str|int) -> aiohttp.ClientResponse:
-        """
-        Automates the declare,hover, and lock in process
-        Args:
-            champ (str | int): The champion to select given ID
-
-        Returns:
-            aiohttp.ClientResponse: http response of the request
-        """
-        champId = self.champ_identity(champ)
-        actionData = self.is_player_turn()
-        if not actionData:
-            return
-        if self.playerData['championPickIntent'] ==0 and len(self.banned_champs) <10:
-            await self.declare_champion(champId)
-
-        if len(self.banned_champs) >=10 and champId not in self.not_pickable():
-            await self.post_champ()
 
     def hovered_champions(self):
         return [champ['championPickIntent'] for champ in self.data['myTeam']]
@@ -215,33 +223,36 @@ class ChampionSession(object):
         Returns:
             None
         """
+        #TODO Include an auto ban list for specific role position
         champId = deque([self.champ_identity(champ) for champ in champList])
         actionData = self.is_player_turn()
         if not actionData:
             return
-        if self.session_phase == "BAN_PICK" and actionData['type'] == 'ban':
+        if self.event_phase == "BAN_PICK" and actionData['type'] == 'ban':
             try:
                 while not self.should_ban(champId[0]):
                     champId.popleft()
             except IndexError:
                 return
-            await self.select_champ(champId[0])
-            await self.post_champ()
+            else:
+                await self.hover_champion(champId[0])
+                await self.ban_pick_champion()
 
 
 
 
 # GAME_STARTING
     async def auto_pick(self,laneChamps:typing.Dict[str,typing.List[str]]) -> aiohttp.ClientResponse:
-        actionData = self.is_player_turn()
-        champIds = deque([self.champ_identity(champ) for champ in laneChamps[self.playerData['assignedPosition']]])
-        if self.playerData['championPickIntent'] == 0 and self.session_phase == "PLANNING":
-            await self.declare_champion(champIds[0])
+        if self.playerData['championPickIntent'] == 0 and self.event_phase == "PLANNING":
+            champIds = deque([self.champ_identity(champ) for champ in laneChamps[self.playerData['assignedPosition']]])
+            await self.hover_champion(champIds[0])
         
+        actionData = self.is_player_turn()
         if not actionData:
             return
         
-        elif actionData['type'] == 'pick' and self.session_phase == 'BAN_PICK':
+        elif actionData['type'] == 'pick' and self.event_phase == 'BAN_PICK':
+            champIds = deque([self.champ_identity(champ) for champ in laneChamps[self.playerData['assignedPosition']]])
             not_pickable_champs = self.not_pickable()
             try:
                 while champIds[0] in not_pickable_champs:
@@ -249,16 +260,17 @@ class ChampionSession(object):
             except IndexError:
                 return #all champions picked
             if self.playerData['championPickIntent'] == 0 or self.playerData['championId'] == 0:
-                await self.select_champ(champIds[0])
+                await self.hover_champion(champIds[0])
             elif self.playerData['championPickIntent'] != 0 and self.playerData['championPickIntent'] != champIds[0]:
-                await self.select_champ(self.playerData['championPickIntent'])
+                #check if user has manually selected different champion
+                await self.hover_champion(self.playerData['championPickIntent'])
             uri = f"/lol-champ-select/v1/session/actions/{actionData['id']}/complete"
             await self.session.request('POST',uri,data=actionData)
 
 
-    async def post_champ(self) -> aiohttp.ClientResponse:
-        """Lock-in/Ban the currently hovered/selected champion
-
+    async def ban_pick_champion(self) -> aiohttp.ClientResponse:
+        """
+        Lock-in/Ban the currently hovered/selected champion
         Returns:
             aiohttp.ClientResponse: The http response
         """
@@ -268,4 +280,5 @@ class ChampionSession(object):
             uri = f"/lol-champ-select/v1/session/actions/{actionData['id']}/complete"
             response = await self.session.request('POST',uri,data=actionData)
             return response
+
 

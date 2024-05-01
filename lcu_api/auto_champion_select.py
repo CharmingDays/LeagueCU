@@ -52,7 +52,7 @@ async def auto_champ_select(connection:socketConnection,event:socketResponse):
 # @client.ws.register('/lol-champ-select/v1/session',event_types=("UPDATE",))
 async def champion_select(connection:socketConnection,event:socketResponse) -> None:
     champ.update_data(connection,event)
-    if champ.session_phase == "GAME_STARTING":
+    if champ.event_phase == "GAME_STARTING":
         # client.stop()
         # start_click_counter()
         return 
