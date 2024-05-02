@@ -129,6 +129,22 @@ class ChampionSession(object):
 
 
 
+    def is_ban_turn(self) -> typing.Dict:
+        """Ban a champion
+
+        Args:
+            champ (str | int): The champion name or id
+
+        Returns:
+            aiohttp.ClientResponse: The http response
+        """
+        for actionType in self.data['actions']:
+            for action in actionType:
+                if action['actorCellId'] == self.localPlayerCellId and not action['completed'] and action['type'] == "ban":
+                    return action
+        
+        return {}
+
     def is_player_turn(self) ->bool|typing.Dict:
         """Returns the player's action data dict if true
 
@@ -166,6 +182,16 @@ class ChampionSession(object):
         else:
             raise TypeError("Must be str or int")
         
+
+    def select_champion_to_ban(self,champ:str|int) -> aiohttp.ClientResponse:
+        champId = self.champ_identity(champ)
+        for actionType in self.data['actions']:
+            for action in actionType:
+                if action['actorCellId'] == self.localPlayerCellId and not action['completed'] and action['type'] == "ban":
+                    action['championId'] = champId
+                    uri = f'/lol-champ-select/v1/session/actions/{action["id"]}'
+                    response = self.session.request('PATCH',uri,data=action)
+                    return response
 
     async def hover_champion(self,champ:str|int):
         champId = self.champ_identity(champ)
@@ -225,7 +251,7 @@ class ChampionSession(object):
         """
         #TODO Include an auto ban list for specific role position
         champId = deque([self.champ_identity(champ) for champ in champList])
-        actionData = self.is_player_turn()
+        actionData = self.is_ban_turn()
         if not actionData:
             return
         if self.event_phase == "BAN_PICK" and actionData['type'] == 'ban':
@@ -235,7 +261,7 @@ class ChampionSession(object):
             except IndexError:
                 return
             else:
-                await self.hover_champion(champId[0])
+                await self.select_champion_to_ban(champId[0])
                 await self.ban_pick_champion()
 
 

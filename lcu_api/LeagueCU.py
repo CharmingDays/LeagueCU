@@ -49,7 +49,7 @@ async def champion_select_events(connection:socketConnection,event:socketRespons
         return
     champ.update_data(connection,event)
     await champ.auto_pick(laneChamps=lcu_settings['champ_select']['auto_picks'])
-    await champ.auto_ban(champList=lcu_settings['champ_select']['auto_bans'])
+    await champ.auto_ban(champList=lcu_settings['champ_select']['auto_picks'])
 
 
 

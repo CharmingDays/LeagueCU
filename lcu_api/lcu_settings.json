@@ -10,36 +10,70 @@
         "ban_delay":[3],
         "pick_delay":[2],
         "declare_delay":[5],
-        "auto_bans": [
-            "blitzcrank",
-            "zyra",
-            "twitch",
-            "senna"
-        ],
         "auto_picks": {
-            "bottom": [
-                "vayne",
-                "jinx",
-                "kaisa",
-                "kogmaw"
-            ],
-            "middle": [
-                "karma",
-                "twistedfate"
-            ],
-            "support": [
-                "karma",
-                "lux",
-                "thresh"
-            ],
-            "top": [
-                "malphite"
-            ],
-            "jungle": [
-                "leesin",
-                "ivern",
-                "briar"
-            ]
+            "bottom": {
+                "picks":[
+                    "jinx",
+                    "kogmaw",
+                    "vayne",
+                    "kaisa"
+                ],
+                "bans":[
+                    "draven",
+                    "blitzcrank",
+                    "zyra"
+                ]
+            },
+            "middle": {
+                "picks":[
+                    "leblanc",
+                    "lux",
+                    "orianna"
+                ],
+                "bans":[
+                    "diana",
+                    "ahri",
+                    "yone"
+                ]
+            },
+            "support": {
+                "picks":[
+                    "sona",
+                    "thresh",
+                    "blitzcrank"
+                ],
+                "bans":[
+                    "zyra",
+                    "leona",
+                    "xreath"
+                ]
+            },
+
+            "top": {
+                "picks":[
+                    "nasus",
+                    "chogath",
+                    "fiora"
+                ],
+                "bans":[
+                    "darius",
+                    "quinn",
+                    "vayne"
+                ]
+            },
+            "jungle": {
+                "picks":[
+                    "lilia",
+                    "graves",
+                    "amumu",
+                    "masteryi"
+                ],
+                "bans":[
+                    "skarnar",
+                    "diana",
+                    "evelynn"
+                ]
+            }
         }
     },
     "post_game": {
