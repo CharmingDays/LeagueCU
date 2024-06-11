@@ -3,12 +3,10 @@ from collections import deque
 import json
 import os
 import sys
-import typing
-import aiohttp
 from lcu_driver.connection import Connection as socketConnection
 from lcu_driver.events.responses import WebsocketEventResponse as socketResponse
 from lcu_driver.connector import Connector
-from champ_session import ChampionSession
+from leagueUpdate.old_champion_select import ChampionSession
 
 
 client:Connector = Connector()
@@ -46,10 +44,14 @@ async def client_ready(connection:socketConnection):
 @client.ws.register('/lol-champ-select/v1/session',event_types=("UPDATE",))
 async def champion_select_events(connection:socketConnection,event:socketResponse) -> None:
     if not event.data.get('actions',None):
-        return
-    champ.update_data(connection,event)
-    await champ.auto_pick(laneChamps=lcu_settings['champ_select']['auto_picks'])
-    await champ.auto_ban(champList=lcu_settings['champ_select']['auto_picks'])
+        print('NO ACTION DATA',list(event.data.keys())[:2])
+    elif event.data:
+        print('PRESENT DATA',list(event.data.keys())[:2])
+    # if not event.data.get('actions',None):
+    #     return
+    # champ.update_data(connection,event)
+    # await champ.auto_pick(laneChamps=lcu_settings['champ_select']['auto_picks'])
+    # await champ.auto_ban(champList=lcu_settings['champ_select']['auto_picks'])
 
 
 
@@ -63,10 +65,7 @@ async def matchmaking_events(connection:socketConnection,event:socketResponse):
 async def sort_ballot(connection:socketConnection):
     uri = '/lol-honor-v2/v1/ballot'
     resp = await connection.request("get",uri)
-    data = await resp.json()
     
-
-
 
 
 
@@ -74,8 +73,6 @@ async def sort_ballot(connection:socketConnection):
 async def gameflow_phases(conn:socketConnection,event:socketResponse):
     # ReadyCheck,ChampSelect,GameStart,InProgress,WaitingForStats,PreEndOfGame,EndOfGame
     async with asyncLock:
-        if lcu_settings['previous_state'] == "Matchmaking" and event.data == "Lobby":
-            lcu_settings['lobby']['auto_start'] = False
         if event.data == "ChampSelect":
             lcu_settings['lobby']['auto_start'] = True
 
@@ -86,10 +83,11 @@ async def gameflow_phases(conn:socketConnection,event:socketResponse):
             await sort_ballot(conn)
             
 
-        lcu_settings['previous_state'] = event.data
-
 @client.ws.register('/lol-lobby/v2/lobby',event_types=("UPDATE",))
 async def lobby_events(conn,event):
+    for _ in range(5):
+        await asyncio.sleep(1)
+        
     async with asyncLock:
         if event.data['canStartActivity'] and lcu_settings['lobby']['auto_start']:
             await conn.request("post",'/lol-lobby/v2/lobby/matchmaking/search')
@@ -101,12 +99,16 @@ async def queue_cancelled(_,event):
         if not event.data:
             lcu_settings['lobby']['auto_start'] = False
 
+    lcu_settings
 
 
 @client.ws.register('/lol-honor-v2/v1/honor-player',event_types=("UPDATE","CREATE"))
 async def player_honor(conn,event):
     # NOTE None -> skip?
     print('honor data',event.data)
+
+
+
 
 @client.ws.register("/lol-champ-select/v1/session/trades",event_types=("CREATE","UPDATE"))
 async def trade_session(conn,event):

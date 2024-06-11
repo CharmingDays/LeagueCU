@@ -2,7 +2,7 @@
     "previous_state":"",
     "lobby": {
         "auto_accept": true,
-        "auto_start": true,
+        "auto_start": false,
         "chat_control": false,
         "accept_delay":[3,5]
     },
@@ -13,10 +13,9 @@
         "auto_picks": {
             "bottom": {
                 "picks":[
-                    "jinx",
-                    "kogmaw",
-                    "vayne",
-                    "kaisa"
+                    "caitlyn",
+                    "jhin",
+                    "jinx"
                 ],
                 "bans":[
                     "draven",

@@ -48,7 +48,7 @@ class ChampionSession(object):
             their IDs as values.
         """
         fileDir = os.path.dirname(__file__)
-        if "champIds.json" not in os.listdir(fileDir):
+        if "championIds.json" not in os.listdir(fileDir):
             # TODO: include version check of champion ids
             dragonUrl = 'https://ddragon.leagueoflegends.com/api/versions.json'
             version = requests.get(dragonUrl).json()[0]
@@ -301,7 +301,6 @@ class ChampionSession(object):
             aiohttp.ClientResponse: The http response
         """
         actionData = self.is_player_turn()
-        actionData
         if actionData and actionData['championId'] != 0:
             uri = f"/lol-champ-select/v1/session/actions/{actionData['id']}/complete"
             response = await self.session.request('POST',uri,data=actionData)
