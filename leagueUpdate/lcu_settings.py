@@ -57,3 +57,6 @@ class LcuSettings(object):
     
     def get(self,key:str,default:typing.Any=None):
         return self.settings.get(key,default)
+    
+    def output_settings(self):
+        print(self.settings['champion_select'])

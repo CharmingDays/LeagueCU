@@ -37,10 +37,10 @@ async def on_connect(_:Connection):
 @champion_select.updater
 async def on_champion_select(_:Connection,response:Response):
     if not response.data:
-        response.data
-    
-    await champion_select.auto_ban(settings.settings['champion_select'])
-    await champion_select.auto_pick(settings.settings['champion_select'])
+        return
+    if settings.settings['champion_select']['automate']:
+        await champion_select.auto_ban(settings.settings['champion_select'])
+        await champion_select.auto_pick(settings.settings['champion_select'])
 
 
 
@@ -56,16 +56,18 @@ async def matchmaking_events(connection:Connection,event:Response):
 @client.ws.register('/lol-matchmaking/v1/search',event_types=('UPDATE',))
 @lobby.updater
 async def avoid_autofill(connection:Connection,event:Response):
-    """Avoid getting autofilled by restarting queue with 10 second delay if estimated queue time is exceeded
+    """Avoid getting filled by restarting queue with 10 second delay if estimated queue time is exceeded
 
     Args:
         connection (Connection): _description_
         event (Response): _description_
     """
-    if event.data['timeInQueue'] > event.data['estimatedQueueTime']:
-        await connection.request("DELETE",'/lol-lobby/v2/lobby/matchmaking/search')
-        await asyncio.sleep(10)
-        await client.connection.request("post",'/lol-lobby/v2/lobby/matchmaking/search')
+    if event.data['timeInQueue']+15 > event.data['estimatedQueueTime']:
+        lobby_info = await lobby.lobby_info()
+        if lobby_info['localMember']['isLeader']:
+            await connection.request("DELETE",'/lol-lobby/v2/lobby/matchmaking/search')
+            await asyncio.sleep(10)
+            await client.connection.request("post",'/lol-lobby/v2/lobby/matchmaking/search')
 
 
 
@@ -75,8 +77,9 @@ async def gameflow_phases(conn:Connection,event:Response):
     # if event.data == 'EndOfGame':
     #     await conn.request("post",'/lol-lobby/v2/play-again')
     if event.data == 'PreEndOfGame':
-        await conn.request('post',' /lol-honor-v2/v1/late-recognition/ack')
-        print("/lol-honor-v2/v1/late-recognition/ack")
+        resp = await conn.request('post','/lol-honor-v2/v1/late-recognition/ack')
+        data = await resp.json()
+        print(data)
         
 
 

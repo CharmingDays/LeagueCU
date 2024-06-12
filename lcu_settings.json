@@ -7,6 +7,7 @@
         "accept_delay":[3,5]
     },
     "champion_select": {
+        "automate": true,
         "ban_delay":[3],
         "pick_delay":[2],
         "declare_delay":[5],
@@ -20,9 +21,9 @@
                 "xayah"
             ],
             "bans":[
+                "blitzcrank",
                 "brand",
-                "zyra",
-                "blitzcrank"
+                "zyra"
             ]
         },
         "middle": {

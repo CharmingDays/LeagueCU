@@ -34,3 +34,9 @@ class LcuLobby(object):
 
     async def invite_players(self,players:typing.List[str]):
         pass
+
+
+    async def lobby_info(self):
+        uri = '/lol-lobby/v2/lobby'
+        response = await self.session.request('get',uri)
+        return await response.json()

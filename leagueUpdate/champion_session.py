@@ -1,14 +1,16 @@
 import asyncio
 import json
 import os
-import aiohttp
 from lcu_driver.connection import Connection as socketConnection
 from lcu_driver.events.responses import WebsocketEventResponse as socketResponse
 import typing
 import requests
 from collections import deque
 
-
+RED_COLOR = "\033[31m"
+GREEN_COLOR = "\033[32m"
+RESET_COLOR = "\033[0m"
+BLUE_COLOR = "\033[34m"
 """
 actions: List
     [
@@ -50,11 +52,13 @@ def trace_methods(cls):
 
 def trace_method(method):
     def wrapper(*args, **kwargs):
-        print(f'Method: {method.__name__} invoked!')
+        print(f'{BLUE_COLOR}{method.__name__}{RESET_COLOR}')
         return method(*args, **kwargs)
     return wrapper
 
-@trace_methods
+
+
+
 class LcuChampionSelectSession(object):
     def __init__(self) -> None:
         self.event_data:typing.Dict[str,typing.Any] = {}
@@ -128,8 +132,13 @@ class LcuChampionSelectSession(object):
         Returns:
             typing.Dict[str, typing.Any]: The player data.
         """
+        # return next((data for data in self.event_data['myTeam'] if data['cellId'] == cell_id), None)
         cell_id = self.cell_id
-        return next((data for data in self.event_data['myTeam'] if data['cellId'] == cell_id), None)
+        teamData = self.event_data['myTeam']
+        for player in teamData:
+            if player['cellId'] == cell_id:
+                return player
+        return None
 
     @property
     def banned_champions(self):
@@ -208,9 +217,14 @@ class LcuChampionSelectSession(object):
         Returns:
             typing.Dict: The data of the action.
         """
+        # action = next((action for action_list in self.event_data['actions'] if action_list[0]['type'] == action_type.lower() for action in action_list if action['actorCellId'] == cell_id and not action['completed']), None)
         cell_id = self.cell_id
-        action = next((action for action_list in self.event_data['actions'] if action_list[0]['type'] == action_type.lower() for action in action_list if action['actorCellId'] == cell_id and not action['completed']), None)
-        return action
+        all_actions = self.event_data['actions']
+        for action_list in all_actions:
+            for action in action_list:
+                if action['actorCellId'] == cell_id and not action['completed'] and action['type'] == action_type.lower():
+                    return action
+        return None
 
 
 
@@ -221,15 +235,18 @@ class LcuChampionSelectSession(object):
             typing.Dict[str,typing.Any] | None: The action data or None if no action is in progress.
         """
         cell_id = self.cell_id
-        for action_list in self.event_data['actions']:
-            return next((action for action in action_list if action.get('actorCellId') == cell_id and action.get('isInProgress', False)), None)
-
+        all_actions = self.event_data['actions']
+        for action_list in all_actions:
+            for action in action_list:
+                if action['actorCellId'] == cell_id and action['isInProgress']:
+                    return action
         return None
+
     
 
-    @verify_action
-    async def select_champion(self,champion_id:int|str) -> None:
-        """Selects the champion with the given ID.
+    async def declare_champion_intent(self,champion_id:int|str) -> None:
+        """
+        Primarily used for declaring champion pick intent, but can be used to select champion for pick and ban (ban is not recommended for this method)
 
         Args:
             champion_id (int | str): The ID of the champion
@@ -241,19 +258,38 @@ class LcuChampionSelectSession(object):
             raise ValueError(f"Champion with id {champion_id} does not exist.")
         
         action = self.get_action_data('pick')
+        if not action:return
         if action is not None:
             action: dict = action
             action['championId'] = self.champion_ids[champion_id]
             uri = f'/lol-champ-select/v1/session/actions/{action["id"]}'
             await asyncio.wait_for(self.session.request('PATCH',uri,data=action), timeout=5)
 
-    @verify_action
+    
+    
+    async def select_champion(self,champion_id:int|str) -> None:
+        """Selects the champion at current given phase action. (Mostly for banning champions & picking)
+
+        Args:
+            champion_id (int | str): The champion identifier.
+
+        """
+
+        action = self.action_data()
+        if not action:return
+        action['championId'] = self.champion_ids[champion_id]
+        uri = f'/lol-champ-select/v1/session/actions/{action["id"]}'
+        await asyncio.wait_for(self.session.request('PATCH',uri,data=action), timeout=5)
+
+
+
     async def complete_selection(self) -> None:
         """
         Complete the selection action.
         """
         # Suggestion 2: Add type hints for the action variable.
         action: dict = self.action_data()
+        if not action:return
         uri = f'/lol-champ-select/v1/session/actions/{action["id"]}/complete'
         # Suggestion 1: Add a timeout to the POST request to avoid hanging indefinitely.
         await asyncio.wait_for(self.session.request('POST', uri, data=action), timeout=5)
@@ -285,7 +321,7 @@ class LcuChampionSelectSession(object):
         Yields:
             int: Champion ID to pick.
         """
-        not_pickable = await self.not_pickable()
+        not_pickable = set(await self.not_pickable())
         for champion in champion_list:
             champion_id = self.champion_ids[champion]
             if champion_id not in not_pickable:
@@ -293,7 +329,7 @@ class LcuChampionSelectSession(object):
 
     
 
-    @verify_action
+    
     async def auto_ban(self,ban_dict:typing.Dict[str,typing.List[str]]):
         """Automates the ban phase of the champion select.
 
@@ -302,14 +338,15 @@ class LcuChampionSelectSession(object):
 
         """
         action = self.action_data()
-        if self.event_phase ==  "BAN_PICK" and action['type'] == 'ban' and not action['completed']:
+        if not action:return
+        if self.event_phase == "BAN_PICK" and action['type'] == 'ban':
             ban_iter = self.ban_champion_iter(ban_dict[self.assigned_role]['bans'])
             banning_champion = await ban_iter.__anext__()
             await self.select_champion(banning_champion)
             await self.complete_selection()
     
 
-    @verify_action
+    
     async def auto_pick(self,pick_dict:typing.Dict[str,typing.List[str]]):
         """Automates the pick phase of the champion select.
 
@@ -319,12 +356,13 @@ class LcuChampionSelectSession(object):
 
         """
         action = self.action_data()
+        if action is None:return
         pick_iter = self.pick_champion_iter(pick_dict[self.assigned_role]['picks'])
-        picking_champion = await pick_iter.__anext__()
+        picking_champion:int = await pick_iter.__anext__()
         if self.event_phase == "PLANNING" and self.player_data['championPickIntent'] == 0:
-            await self.select_champion(picking_champion)
+            return await self.declare_champion_intent(picking_champion)
 
-        elif action['type'] == 'pick' and not action['completed']:
+        if self.event_phase == "BAN_PICK" and action['type'] == 'pick':
             await self.select_champion(picking_champion)
             await self.complete_selection()
                 
@@ -363,19 +401,3 @@ class UnitTest(LcuChampionSelectSession):
         finally:
             file.close()
 
-    @verify_action
-    async def auto_ban(self):
-        action= self.action_data()
-        action
-
-
-
-if __name__ == "__main__":
-    async def main():
-        client = UnitTest()
-        for _ in client.files:
-            client.load_file()
-            await client.auto_ban()
-
-
-    asyncio.run(main())
