@@ -38,7 +38,7 @@
                 "yone"
             ]
         },
-        "support": {
+        "utility": {
             "picks":[
                 "sona",
                 "thresh",
@@ -79,6 +79,6 @@
     },
     "post_game": {
         "honor": "puuid to honor/false to skip",
-        "play_again": false
+        "play_again": true
     }
 }

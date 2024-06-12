@@ -48,7 +48,7 @@ async def on_champion_select(_:Connection,response:Response):
 @client.ws.register('/lol-matchmaking/v1/ready-check',event_types=('UPDATE',))
 async def matchmaking_events(connection:Connection,event:Response):
     # Automatically keep accepting matches when found until script closed
-    if event.data['playerResponse'] == "None":
+    if event.data['playerResponse'] == "None" and settings.settings['lobby']['auto_accept']:
         await connection.request("post",'/lol-matchmaking/v1/ready-check/accept')
 
 
@@ -74,10 +74,10 @@ async def avoid_autofill(connection:Connection,event:Response):
 @client.ws.register('/lol-gameflow/v1/gameflow-phase',event_types=("UPDATE",))
 async def gameflow_phases(conn:Connection,event:Response):
     # ReadyCheck,ChampSelect,GameStart,InProgress,WaitingForStats,PreEndOfGame,EndOfGame
-    # if event.data == 'EndOfGame':
-    #     await conn.request("post",'/lol-lobby/v2/play-again')
+    if event.data == 'EndOfGame' and settings.settings['post_game']['play_again']:
+        await conn.request("post",'/lol-lobby/v2/play-again')
     if event.data == 'PreEndOfGame':
-        resp = await conn.request('post','/lol-honor-v2/v1/late-recognition/ack')
+        resp = await conn.request('post','lol-honor-v2/v1/mutual-honor/ack')
         data = await resp.json()
         print(data)
         
