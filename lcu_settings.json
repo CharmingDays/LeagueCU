@@ -4,23 +4,27 @@
         "auto_accept": true,
         "auto_start": true,
         "chat_control": false,
-        "accept_delay":[3,5]
+        "accept_delay":5,
+        "party_members":[]
     },
     "champion_select": {
+        "accept_trades":false,
         "automate": true,
-        "ban_delay":[3],
-        "pick_delay":[2],
-        "declare_delay":[5],
+        "ban_delay":6,
+        "pick_delay":5,
+        "declare_delay":0,
         "bottom": {
             "picks":[
-                "ashe",
-                "jinx",
-                "vayne",
                 "caitlyn",
-                "sivir",
-                "xayah"
+                "jinx",
+                "ashe",
+                "kogmaw",
+                "vayne",
+                "sivir"
             ],
             "bans":[
+                "ahri",
+                "lux",
                 "blitzcrank",
                 "brand",
                 "zyra"
@@ -78,7 +82,14 @@
         }
     },
     "post_game": {
-        "honor": "puuid to honor/false to skip",
+        "skip_honor":false,
+        "honor_target": "damage",
+        "all_honor_types": {
+            "heart": "GGHeart",
+            "cool": "StayedCool",
+            "caller": "GreatShotcalling"
+        },
+        "honor_type": "heart",
         "play_again": true
     }
 }

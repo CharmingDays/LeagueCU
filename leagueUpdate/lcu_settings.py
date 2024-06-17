@@ -1,6 +1,7 @@
 import json
 import os
 import typing
+import asyncio
 
 
 RED_COLOR = "\033[31m"
@@ -10,8 +11,8 @@ BLUE_COLOR = "\033[34m"
 class LcuSettings(object):
     def __init__(self) -> None:
         self.settings:typing.Dict[str,typing.Any] = {}
+        self.lock = asyncio.Lock()
         self.load_settings()
-
 
     def color_print(self,color:str,text:str):
         print(f"{color}{text}{RESET_COLOR}")
@@ -30,11 +31,20 @@ class LcuSettings(object):
                 self.color_print(RED_COLOR,"Settings file not found, used default settings file")
         
 
-    def __getitem__(self,key:str):
-        return self.settings[key]
+    async def __getitem__(self,keys:tuple|str ):
+        async with self.lock:
+            if not isinstance(keys,tuple):
+                keys = (keys,)
+            value = self.settings
+            for key in keys:
+                value = value.get(key)
+            return value
 
-    def __setitem__(self,key:str,value:typing.Any):
-        self.settings[key] = value
+
+
+    async def __setitem__(self,key:str,value:typing.Any):
+        async with self.lock:
+            self.settings[key] = value
 
 
     def add_bans(self,role:str,champion:str):
@@ -60,3 +70,5 @@ class LcuSettings(object):
     
     def output_settings(self):
         print(self.settings['champion_select'])
+
+

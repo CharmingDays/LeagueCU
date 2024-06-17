@@ -330,7 +330,7 @@ class LcuChampionSelectSession(object):
     
 
     
-    async def auto_ban(self,ban_dict:typing.Dict[str,typing.List[str]]):
+    async def auto_ban(self,ban_dict:typing.Dict[str,typing.List[str]],delay=0):
         """Automates the ban phase of the champion select.
 
         Args:
@@ -340,14 +340,17 @@ class LcuChampionSelectSession(object):
         action = self.action_data()
         if not action:return
         if self.event_phase == "BAN_PICK" and action['type'] == 'ban':
+            remaining_time = (self.event_data['timer']['adjustedTimeLeftInPhase']/1000)
             ban_iter = self.ban_champion_iter(ban_dict[self.assigned_role]['bans'])
             banning_champion = await ban_iter.__anext__()
+            if remaining_time > delay:
+                await asyncio.sleep(delay)
             await self.select_champion(banning_champion)
             await self.complete_selection()
     
 
     
-    async def auto_pick(self,pick_dict:typing.Dict[str,typing.List[str]]):
+    async def auto_pick(self,pick_dict:typing.Dict[str,typing.List[str]],delay:int=0):
         """Automates the pick phase of the champion select.
 
         Args:
@@ -362,10 +365,22 @@ class LcuChampionSelectSession(object):
         if self.event_phase == "PLANNING" and self.player_data['championPickIntent'] == 0:
             return await self.declare_champion_intent(picking_champion)
 
-        if self.event_phase == "BAN_PICK" and action['type'] == 'pick':
+        if self.event_phase == "BAN_PICK" and action['type'] == 'pick' and self.player_data['championPickIntent'] == 0:
+            #Champion banned or picked by another player
             await self.select_champion(picking_champion)
-            await self.complete_selection()
-                
+
+        time_remaining = (self.event_data['timer']['adjustedTimeLeftInPhase']/1000)
+        if time_remaining > delay:
+            await asyncio.sleep(delay)
+
+        await self.complete_selection()        
+
+    async def trade_position(self,player_position:int) -> None:
+        available_trades_uri  = "/lol-champ-select/v1/session/trades"
+        response = await self.session.request('GET',available_trades_uri)
+        trade_options = await response.json()
+        uri = f"/lol-champ-select/v1/session/trades/{id}/request"
+
 
     async def auto_runes(self):
         pass
