@@ -36,27 +36,31 @@ class LcuLobby(object):
         return {}
     
     async def open_lobby(self,lobby_type:str):
+        # make party open to any friends.
         uri ='/lol-lobby/v2/lobby'
     
 
     async def close_lobby(self):
         uri = '/lol-lobby/v2/lobby'
-        await self.session.request('delete',uri)
+        response =await self.session.request('delete',uri)
+        if not response.ok:
+            return {'errorCode':response.status_code}
         
 
     async def invite_players(self,players:typing.List[str]):
         pass
 
 
-    async def lobby_info(self):
+    async def lobby_info(self) ->typing.Dict[str,typing.Any]:
         uri = '/lol-lobby/v2/lobby'
         response = await self.session.request('get',uri)
-        return await response.json()
-    
+        if not response.ok:
+            return {'errorCode':response.status_code}
+        return await response.json()   
 
     async def update_party_members(self):
         party_members = await self.lobby_info()
-        if not party_members:
+        if not party_members or party_members.get('errorCode'):
             await self.settings['lobby']['party_members'].clear()
             return
         for member in party_members:
@@ -65,12 +69,17 @@ class LcuLobby(object):
     
     async def find_match(self):
         uri = '/lol-lobby/v2/lobby/matchmaking/search'
-        await self.session.request('post',uri)
+        response = await self.session.request('post',uri)
+        if not response.ok:
+            return {'errorCode':response.status_code}
+
 
 
     async def cancel_queue(self):
         uri = '/lol-lobby/v2/lobby/matchmaking/search'
-        await self.session.request('delete',uri)
+        response = await self.session.request('delete',uri)
+        if not response.ok:
+            return {'errorCode':response.status_code}
 
 
     async def create_lobby(self,lobby_type:str="RANKED"):
@@ -88,4 +97,6 @@ class LcuLobby(object):
             "queueId": queue_dict[lobby_type.upper()]
         }
         resp = await self.session.request('post',uri,data=payload)
+        if not resp.ok:
+            return {'errorCode':resp.status_code}
         return await resp.json()

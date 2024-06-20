@@ -65,6 +65,8 @@ class LcuChampionSelectSession(object):
         self.champion_ids:typing.Dict[str,typing.Any] = {}
         self.session:socketConnection
         self.set_champion_data()
+        self.loop:asyncio.AbstractEventLoop = asyncio.get_event_loop()
+        self.running_tasks:typing.Dict = {}
 
 
 
@@ -184,6 +186,14 @@ class LcuChampionSelectSession(object):
     def assigned_role(self) -> str:
         return self.player_data['assignedPosition']
 
+
+    async def wait_until(self,total_time,adjust_time,delay:int) -> None:
+        """
+        Waits until delay time is met
+        """
+        while total_time- adjust_time < delay:
+            await asyncio.sleep(1)
+            adjust_time-=1000
 
     async def disabled_champions(self) -> typing.Dict[str,typing.Any]:
         """
@@ -340,16 +350,28 @@ class LcuChampionSelectSession(object):
         action = self.action_data()
         if not action:return
         if self.event_phase == "BAN_PICK" and action['type'] == 'ban':
-            remaining_time = (self.event_data['timer']['adjustedTimeLeftInPhase']/1000)
+            if delay > 30:
+                delay = 30
+            delay*=1000
             ban_iter = self.ban_champion_iter(ban_dict[self.assigned_role]['bans'])
             banning_champion = await ban_iter.__anext__()
-            if remaining_time > delay:
-                await asyncio.sleep(delay)
+            remaining_time = (self.event_data['timer']['adjustedTimeLeftInPhase']/1000)
+            total_time = self.event_data['timer']['totalTimeInPhase']
+            await self.wait_until(total_time,remaining_time,delay)
             await self.select_champion(banning_champion)
             await self.complete_selection()
     
 
     
+    async def confirm_champion_intent(self,champion:int,delay:int):
+        delay*=1000
+        while self.event_phase == "PLANNING" and self.player_data['championPickIntent'] == 0:
+            adjusted_time = self.event_data['timer']['adjustedTimeLeftInPhase']
+            total_time = self.event_data['timer']['totalTimeInPhase']
+            await self.wait_until(total_time,adjusted_time,delay)
+            await self.declare_champion_intent(champion)
+
+
     async def auto_pick(self,pick_dict:typing.Dict[str,typing.List[str]],delay:int=0):
         """Automates the pick phase of the champion select.
 
@@ -365,14 +387,17 @@ class LcuChampionSelectSession(object):
         if self.event_phase == "PLANNING" and self.player_data['championPickIntent'] == 0:
             return await self.declare_champion_intent(picking_champion)
 
+        confirm_pick_intent = self.loop.create_task(self.confirm_champion_intent(picking_champion,delay))
+        await confirm_pick_intent
+
+
         if self.event_phase == "BAN_PICK" and action['type'] == 'pick' and self.player_data['championPickIntent'] == 0:
             #Champion banned or picked by another player
             await self.select_champion(picking_champion)
 
-        time_remaining = (self.event_data['timer']['adjustedTimeLeftInPhase']/1000)
-        if time_remaining > delay:
-            await asyncio.sleep(delay)
-
+        time_remaining = self.event_data['timer']['adjustedTimeLeftInPhase']
+        total_time = self.event_data['timer']['totalTimeInPhase']
+        await self.wait_until(total_time,time_remaining,delay)
         await self.complete_selection()        
 
     async def trade_position(self,player_position:int) -> None:

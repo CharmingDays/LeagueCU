@@ -22,16 +22,15 @@ lobby:LcuLobby = LcuLobby()
 
 
 
-
-
 @client.ready
 @summoner.updater
 @lobby.updater(var=settings)
-async def on_connect(_:Connection):
+async def on_connect(conn:Connection):
     print("Connected to League Client")
     summoner_info = await summoner.summoner_info()
     print(f"Summoner: {summoner_info['displayName']}\nID: {summoner_info['summonerId']}\nLevel: {summoner_info['summonerLevel']}")
     print(await lobby.lobby_settings())
+
 
 
 @client.ws.register('/lol-champ-select/v1/session',event_types=('CREATE','UPDATE'))
@@ -78,7 +77,6 @@ async def avoid_autofill(connection:Connection,event:Response):
             await lobby.find_match()
 
 
-#TODO honor most damage or friend or random or role
 @client.ws.register('/lol-gameflow/v1/gameflow-phase',event_types=("UPDATE",))
 async def gameflow_phases(conn:Connection,event:Response):
     # ReadyCheck,ChampSelect,GameStart,InProgress,WaitingForStats,PreEndOfGame,EndOfGame
