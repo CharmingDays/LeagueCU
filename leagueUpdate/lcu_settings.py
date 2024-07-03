@@ -41,11 +41,25 @@ class LcuSettings(object):
             return value
 
 
-
-    async def __setitem__(self,key:str,value:typing.Any):
+    async def set(self,keys:tuple|str,value:typing.Any):
         async with self.lock:
-            self.settings[key] = value
+            if not isinstance(keys,tuple):
+                keys = (keys,)
+            previous = self.settings
+            for key in keys:
+                current = previous.get(key,None)
+                if current is None or keys[-1] == key:
+                    previous[key] = value
+                    return
+                previous = current
 
+    def get(self,keys:tuple|str) -> typing.Any:
+        if not isinstance(keys,tuple):
+            keys = (keys,)
+        value = self.settings
+        for key in keys:
+            value = value.get(key)
+        return value
 
     def add_bans(self,role:str,champion:str):
         self.settings['champion_select'][role]['bans'].append(champion)
@@ -65,10 +79,6 @@ class LcuSettings(object):
         except ValueError:
             self.color_print(RED_COLOR,f"Could not find {champion} in picks for {role}")
     
-    def get(self,key:str,default:typing.Any=None):
-        return self.settings.get(key,default)
-    
     def output_settings(self):
         print(self.settings['champion_select'])
-
 

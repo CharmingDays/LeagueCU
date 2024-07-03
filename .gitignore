@@ -3,7 +3,16 @@ __pycache__/
 .vscode/
 *.py[cod]
 *$py.class
+
+# Ignore test files,dirs
 test*.*
+test/
+*test/
+test*/
+testData/
+test*.py
+nosetests.xml
+.pytest_cache/
 
 # C extensions
 *.so
@@ -13,7 +22,6 @@ Friend_list/
 .Python
 build/
 node_modules/
-test/
 develop-eggs/
 dist/
 downloads/
@@ -42,20 +50,17 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Unit test / coverage reports
-testData/
-test*.py
+
 htmlcov/
 .tox/
 .nox/
 .coverage
 .coverage.*
 .cache
-nosetests.xml
 coverage.xml
 *.cover
 *.py,cover
 .hypothesis/
-.pytest_cache/
 cover/
 
 # Translations

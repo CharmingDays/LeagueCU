@@ -13,7 +13,7 @@ class LcuLobby(object):
         self.settings:LcuSettings
 
 
-    def updater(self,var=None):
+    def updater(self,lcu_settings=None):
         def decorator(func):
             async def update_wrapper(*args,**kwargs):
                 self.session = args[0]
@@ -21,11 +21,11 @@ class LcuLobby(object):
                     self.event_data = args[1]
                 except IndexError:
                     pass
-                if var:
+                if lcu_settings:
                     if hasattr(self,'settings'):
-                        self.settings = var
+                        self.settings = lcu_settings
                     else:
-                        setattr(self,'settings',var)
+                        setattr(self,'settings',lcu_settings)
                 return await func(*args,**kwargs)
             return update_wrapper
         return decorator

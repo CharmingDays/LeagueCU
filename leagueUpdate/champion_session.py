@@ -5,7 +5,7 @@ from lcu_driver.connection import Connection as socketConnection
 from lcu_driver.events.responses import WebsocketEventResponse as socketResponse
 import typing
 import requests
-from collections import deque
+from lcu_settings import LcuSettings
 
 RED_COLOR = "\033[31m"
 GREEN_COLOR = "\033[32m"
@@ -66,8 +66,8 @@ class LcuChampionSelectSession(object):
         self.session:socketConnection
         self.set_champion_data()
         self.loop:asyncio.AbstractEventLoop = asyncio.get_event_loop()
-        self.running_tasks:typing.Dict = {}
-
+        self.running_tasks:typing.List = []
+        self.settings:LcuSettings
 
 
     def fetch_champion_ids(self):
@@ -98,26 +98,24 @@ class LcuChampionSelectSession(object):
             with open('championIds.json','w') as champion_file:
                 json.dump(champion_ids,champion_file)
 
-    def updater(self, func):
-        """
-        Decorator function for updating session data.
-
-        Args:
-            func (function): The function to be decorated.
-
-        Returns:
-            function: The decorated function.
-
-        Raises:
-            TypeError: If the required arguments 'session' and 'data' are not provided.
-
-        """
-        async def update_wrapper(*args,**kwargs):
-            self.session = args[0]
-            self.event_data = args[1].data
-            return await func(*args,**kwargs)
-        return update_wrapper
-
+ 
+    def updater(self,lcu_settings=None):
+        def decorator(func):
+            async def update_wrapper(*args,**kwargs):
+                self.session = args[0]
+                try:
+                    self.event_data = args[1].data
+                except IndexError:
+                    pass
+                if lcu_settings:
+                    if hasattr(self,'settings'):
+                        self.settings = lcu_settings
+                    else:
+                        setattr(self,'settings',lcu_settings)
+                return await func(*args,**kwargs)
+            return update_wrapper
+        return decorator
+    
     @property
     def event_phase(self):
         return self.event_data['timer']['phase']
@@ -143,18 +141,18 @@ class LcuChampionSelectSession(object):
         return None
 
     @property
-    def banned_champions(self):
+    def banned_champions(self) -> typing.Set[int]:
         """Returns a list of champion IDs that have been banned.
 
         Returns:
             list: A list of champion IDs that have been banned.
         """
         ban_actions = self.event_data['actions'][0]
-        return [action['championId'] for action in ban_actions if action['completed']]
+        return set([action['championId'] for action in ban_actions if action['completed']])
     
 
     @property
-    def picked_champions(self):
+    def picked_champions(self) -> typing.Set[int]:
         """
         Returns a list of champion IDs for the champions that have been picked.
         
@@ -162,17 +160,17 @@ class LcuChampionSelectSession(object):
             list: A list of champion IDs.
         """
         pick_actions = self.event_data['actions'][2:]
-        return [pick['championId'] for action in pick_actions for pick in action if pick['completed']]
+        return set([pick['championId'] for action in pick_actions for pick in action if pick['completed']])
 
     @property
-    def hovered_champions(self) -> typing.List[int]:
+    def hovered_champions(self) -> typing.Set[int]:
         """Hovered champions in the current session.
 
         Returns:
             typing.List: The list of champions hovered by team
         """
         champions = [data['championPickIntent'] for data in self.event_data['myTeam'] if data['championPickIntent'] != 0]
-        return champions
+        return set(champions)
 
     @property
     def is_ban_phase(self) -> bool:
@@ -186,16 +184,37 @@ class LcuChampionSelectSession(object):
     def assigned_role(self) -> str:
         return self.player_data['assignedPosition']
 
+    @property
+    def swap_order(self) -> typing.List[dict]:
+        """Swap order for the team
+        [
+        {
+            "cellId": 1,
+            "id": 8,
+            "state": "AVAILABLE"
+        },
+        ...
+        ]
 
-    async def wait_until(self,total_time,adjust_time,delay:int) -> None:
+
+        Returns:
+            typing.List[dict]: The swap order for the team
+        """
+        return self.event_data['pickOrderSwaps']
+
+
+    async def wait_until(self,time_left:float,delay:int) -> None:
         """
         Waits until delay time is met
         """
-        while total_time- adjust_time < delay:
+        while (time_left -1000) > delay and delay > 1:
             await asyncio.sleep(1)
-            adjust_time-=1000
+            delay-=1
+            time_left-=1000
+            
 
-    async def disabled_champions(self) -> typing.Dict[str,typing.Any]:
+
+    async def disabled_champions(self) -> typing.Set[int]:
         """
         champions that are disabled in the current session
         """
@@ -203,19 +222,23 @@ class LcuChampionSelectSession(object):
             uri = '/lol-champ-select/v1/disabled-champions'
             response = await self.session.request('GET',uri)
             data = await response.json()
-            return data['championIds']
+            return set(data['championIds'])
         except Exception as e:
             return []
 
 
-    async def not_pickable(self) -> typing.List[int]:
+    async def not_pickable(self,include_disabled=False) -> typing.Set[int]:
         """
         banned champions + picked champions + disabled champions + (unowned champions?)
         """
-        champions:typing.List = await self.disabled_champions()
-        champions.extend(self.banned_champions)
-        champions.extend(self.picked_champions)
-        return champions
+        invalid_champions = set()
+        if include_disabled:
+            disabled_champions:typing.List = await self.disabled_champions()
+            invalid_champions.update(disabled_champions)
+        
+        invalid_champions.update(self.banned_champions)
+        invalid_champions.update(self.picked_champions)
+        return invalid_champions
     
 
     def get_action_data(self, action_type: str) -> typing.Dict[str, typing.Any] | None:
@@ -321,7 +344,8 @@ class LcuChampionSelectSession(object):
                 yield champion_id
 
 
-    async def pick_champion_iter(self,champion_list):
+    async def pick_champion_iter(self,champion_list:typing.List[int]):
+        # FIXME debug required
         """
         Creates generator of champions pickable in the current session.
 
@@ -331,7 +355,7 @@ class LcuChampionSelectSession(object):
         Yields:
             int: Champion ID to pick.
         """
-        not_pickable = set(await self.not_pickable())
+        not_pickable:typing.Set = await self.not_pickable()
         for champion in champion_list:
             champion_id = self.champion_ids[champion]
             if champion_id not in not_pickable:
@@ -339,8 +363,11 @@ class LcuChampionSelectSession(object):
 
     
 
+
+
+
     
-    async def auto_ban(self,ban_dict:typing.Dict[str,typing.List[str]],delay=0):
+    async def auto_ban(self):
         """Automates the ban phase of the champion select.
 
         Args:
@@ -350,61 +377,80 @@ class LcuChampionSelectSession(object):
         action = self.action_data()
         if not action:return
         if self.event_phase == "BAN_PICK" and action['type'] == 'ban':
-            if delay > 30:
-                delay = 30
-            delay*=1000
-            ban_iter = self.ban_champion_iter(ban_dict[self.assigned_role]['bans'])
+            ban_delay = self.settings.get(('champion_select','ban_delay'))
+            if ban_delay > 0:
+                remaining_time = self.event_data['timer']['adjustedTimeLeftInPhase']
+                await self.wait_until(remaining_time,ban_delay)
+            champion_pool = self.settings.get(('champion_select',self.assigned_role,'bans'))
+            ban_iter = self.ban_champion_iter(champion_pool)
             banning_champion = await ban_iter.__anext__()
-            remaining_time = (self.event_data['timer']['adjustedTimeLeftInPhase']/1000)
-            total_time = self.event_data['timer']['totalTimeInPhase']
-            await self.wait_until(total_time,remaining_time,delay)
             await self.select_champion(banning_champion)
             await self.complete_selection()
     
-
-    
-    async def confirm_champion_intent(self,champion:int,delay:int):
-        delay*=1000
-        while self.event_phase == "PLANNING" and self.player_data['championPickIntent'] == 0:
-            adjusted_time = self.event_data['timer']['adjustedTimeLeftInPhase']
-            total_time = self.event_data['timer']['totalTimeInPhase']
-            await self.wait_until(total_time,adjusted_time,delay)
-            await self.declare_champion_intent(champion)
-
-
-    async def auto_pick(self,pick_dict:typing.Dict[str,typing.List[str]],delay:int=0):
-        """Automates the pick phase of the champion select.
-
-        Args:
-            pick_dict (typing.Dict[str,typing.List[str]]): Dict of champions to pick given the assigned role.
-
-
+    async def auto_declare_champion(self):
+        """
+        Automates the declaration of champion intent in the champion select.
         """
         action = self.action_data()
         if action is None:return
-        pick_iter = self.pick_champion_iter(pick_dict[self.assigned_role]['picks'])
-        picking_champion:int = await pick_iter.__anext__()
         if self.event_phase == "PLANNING" and self.player_data['championPickIntent'] == 0:
-            return await self.declare_champion_intent(picking_champion)
+            declare_delay =await self.settings['champion_select','declare_delay']
+            if declare_delay > 0:
+                phase_time = self.event_data['timer']['adjustedTimeLeftInPhase']
+                await self.wait_until(phase_time,declare_delay)
 
-        confirm_pick_intent = self.loop.create_task(self.confirm_champion_intent(picking_champion,delay))
-        await confirm_pick_intent
+            champions = await self.settings['champion_select',self.assigned_role,'picks']
+            pick_iter = self.pick_champion_iter(champions)
+            await self.declare_champion_intent(await pick_iter.__anext__())
+    
+
+    async def auto_pick_champion(self):
+        """
+        Automates the picking phase of the champion select.
+        """
+        action_data = self.action_data()
+        if action_data is None:return
+        if self.event_phase == "BAN_PICK" and action_data['type'] == 'pick':
+            champion_pool = await self.settings['champion_select',self.assigned_role,'picks']
+            pick_iter = self.pick_champion_iter(champion_pool)
+            picking_champion:int = await pick_iter.__anext__()
+            if self.event_phase == "BAN_PICK" and action_data['type'] == 'pick' and self.player_data['championPickIntent'] == 0:
+                #Champion not selected
+                await self.select_champion(picking_champion)
+
+            pick_delay = await self.settings['champion_select','pick_delay']
+            if pick_delay > 0:
+                time_remaining = self.event_data['timer']['adjustedTimeLeftInPhase']
+                await self.wait_until(time_remaining,pick_delay)
+            await self.complete_selection()
 
 
-        if self.event_phase == "BAN_PICK" and action['type'] == 'pick' and self.player_data['championPickIntent'] == 0:
-            #Champion banned or picked by another player
-            await self.select_champion(picking_champion)
 
-        time_remaining = self.event_data['timer']['adjustedTimeLeftInPhase']
-        total_time = self.event_data['timer']['totalTimeInPhase']
-        await self.wait_until(total_time,time_remaining,delay)
-        await self.complete_selection()        
 
-    async def trade_position(self,player_position:int) -> None:
-        available_trades_uri  = "/lol-champ-select/v1/session/trades"
-        response = await self.session.request('GET',available_trades_uri)
-        trade_options = await response.json()
-        uri = f"/lol-champ-select/v1/session/trades/{id}/request"
+
+    async def ban_and_pick(self):
+        await self.auto_declare_champion()
+        await self.auto_pick_champion()
+        await self.auto_ban()
+
+    async def trade_position(self,player_position:str) -> None:
+        """Swap pick order with another player.
+
+        Args:
+            player_position (int): The position to pick
+        """
+        #NOTE only supports first and last ATM
+        #NOTE full support for all positions will be added later
+        # player_position = 3 if player_position > 3 else player_position
+        available_trades_uri  = self.event_data['pickOrderSwaps']
+        uri = ""
+        if player_position not in ['first','last']:
+            player_position = 'last'
+        if player_position == 'first':
+            uri+= f"/lol-champ-select/v1/session/trades/{available_trades_uri[0]['id']}/request"
+        else:
+            uri+= f"/lol-champ-select/v1/session/trades/{available_trades_uri[-1]['id']}/request"
+        await self.session.request('POST',uri)
 
 
     async def auto_runes(self):
@@ -415,29 +461,4 @@ class LcuChampionSelectSession(object):
 
 
 
-
-
-class UnitTest(LcuChampionSelectSession):
-    def __init__(self) -> None:
-        super().__init__()
-        self.loaded_files = []
-        self.files = self.generate_files()
-    
-
-    def generate_files(self) -> typing.Generator:
-        path = r'D:\Developer\LeagueCU\testData'
-        files:typing.List = os.listdir(path)
-        for file in files:
-            yield os.path.join(path, file)
-
-
-    def load_file(self):
-        path = next(self.files)
-        try:
-            file = open(path,'r',encoding='utf-8')
-            self.event_data = json.loads(file.read())
-        except FileNotFoundError:
-            raise FileNotFoundError(f"File {path} not found.")
-        finally:
-            file.close()
 

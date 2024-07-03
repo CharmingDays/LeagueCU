@@ -1,18 +1,23 @@
 {
-    "previous_state":"",
     "lobby": {
         "auto_accept": true,
         "auto_start": true,
         "chat_control": false,
         "accept_delay":5,
-        "party_members":[]
+        "avoid_autofill":true,
+        "teammate":""
     },
     "champion_select": {
         "accept_trades":false,
         "automate": true,
-        "ban_delay":6,
-        "pick_delay":5,
-        "declare_delay":0,
+        "ban_delay":20,
+        "pick_delay":10,
+        "declare_delay":5,
+        "request_swap":{
+            "planning":true,
+            "pick":true,
+            "position":1
+        },
         "bottom": {
             "picks":[
                 "caitlyn",
@@ -23,7 +28,7 @@
                 "sivir"
             ],
             "bans":[
-                "ahri",
+                "leona",
                 "lux",
                 "blitzcrank",
                 "brand",
@@ -33,12 +38,12 @@
         "middle": {
             "picks":[
                 "leblanc",
-                "lux",
-                "orianna"
+                "ahri",
+                "lux"
             ],
             "bans":[
+                "syndra",
                 "diana",
-                "ahri",
                 "yone"
             ]
         },
@@ -82,14 +87,13 @@
         }
     },
     "post_game": {
-        "skip_honor":false,
-        "honor_target": "damage",
+        "honor_teammate":false,
+        "skip_after":5,
         "all_honor_types": {
             "heart": "GGHeart",
             "cool": "StayedCool",
             "caller": "GreatShotcalling"
         },
-        "honor_type": "heart",
         "play_again": true
     }
 }
