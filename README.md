@@ -2,7 +2,7 @@
 
 ## Running The Application
 
-Simply run the `client.py` file
+Simply run the `client.py` file inside leagueUpdate
 
 
 

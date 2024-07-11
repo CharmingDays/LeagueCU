@@ -1,6 +1,5 @@
 import asyncio
-import json
-import random
+
 from lcu_driver import Connector
 from lcu_driver.connection import Connection
 from lcu_driver.events.responses import WebsocketEventResponse as Response
@@ -90,10 +89,15 @@ async def gameflow_phases(conn:Connection,event:Response):
 
 
     if event.data == 'PreEndOfGame':
+        skip_delay = settings.get(('post_game','skip_honor_delay'))
         if not await settings['post_game','honor_teammate']:
+            if  skip_delay > 0:
+                await asyncio.sleep(skip_delay)
             return await conn.request('post','/lol-honor-v2/v1/honor-player',data={'honorPlayerRequest':False})
         
         if not await settings['lobby']['teammate']:
+            if  skip_delay > 0:
+                await asyncio.sleep(skip_delay)
             return await conn.request('post','/lol-honor-v2/v1/honor-player',data={'honorPlayerRequest':False})
 
         else:
@@ -104,7 +108,7 @@ async def gameflow_phases(conn:Connection,event:Response):
             # print(player_data)
             # await conn.request('post','/lol-honor-v2/v1/honor-player',data={'honorPlayerRequest':False})
             honor_data = {
-                "honorCategory": "GGHeart",
+                "honorCategory": settings.get(('post_game','honor_types','heart')),
                 "summonerId": await settings['lobby','teammate'],
                 "honorPlayerRequest": True
                 }

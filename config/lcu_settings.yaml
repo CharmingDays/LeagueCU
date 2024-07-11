@@ -1,0 +1,84 @@
+lobby:
+    auto_accept: true
+    accept_delay: 5
+    avoid_autofill: true
+    teammate: ""
+champion_select:
+    runes: !include 'runes.yaml'
+    # accept_trades: false
+    automate: true
+    ban_delay: 20
+    pick_delay: 10
+    declare_delay: 5
+    bottom:
+        picks:
+            - caitlyn
+            - jinx
+            - ashe
+            - vayne
+            - kogmaw
+            - sivir
+
+        bans:
+            - leona
+            - lux
+            - blitzcrank
+            - brand
+            - zyra
+    middle:
+        picks:
+            - ahri
+            - leblanc
+            - lux
+            - orianna
+        bans:
+            - syndra
+            - kassadin
+            - yasuo
+            - galio
+
+    top:
+        picks:
+            - nasus
+            - chogath
+            - garen
+            - vayne
+        bans:
+            - quinn
+            - gwen
+            - fiora
+            - darius
+
+    utility:
+        picks:
+            - sona
+            - thresh
+            - xreath
+            - blitzcrank
+        bans:
+            - leona
+            - lux
+            - brand
+            - zyra
+            - morgana
+
+    jungle:
+        picks:
+            - lilia
+            - graves
+            - rammus
+            - sejuani
+        bans:
+            - leesin
+            - nidalee
+            - kha zix
+            - nocturne
+
+post_game:
+    honor_teammate: false
+    skip_honor_delay: 10
+    honor_types:
+        heart: GGHeart
+        cool: StayedCool
+        caller: GreatShotcalling
+    play_again: true

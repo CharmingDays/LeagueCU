@@ -20,4 +20,6 @@ class LcuSummoner(object):
         summoner = await self.session.request('get','/lol-summoner/v1/current-summoner')
         return await summoner.json()
             
-        
+
+    async def change_icon(self,icon_id:int):
+        pass

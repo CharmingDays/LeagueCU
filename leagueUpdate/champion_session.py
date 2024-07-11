@@ -5,8 +5,9 @@ from lcu_driver.connection import Connection as socketConnection
 from lcu_driver.events.responses import WebsocketEventResponse as socketResponse
 import typing
 import requests
+import yaml
 from lcu_settings import LcuSettings
-
+from utils import include_constructor
 RED_COLOR = "\033[31m"
 GREEN_COLOR = "\033[32m"
 RESET_COLOR = "\033[0m"
@@ -26,36 +27,7 @@ actions: List
 """
 
 
-
-def verify_action(func):
-    """Decorator function to verify if the user can perform an action by checking actions array.
-
-    Args:
-        func (func): The function to be decorated.
-    """
-    async def do_nothing():
-        return None
-    def action_wrapper(self,*args, **kwargs):
-        action:typing.Dict[str,typing.Any] = self.event_data
-        if action is None or action.get('myTeam',None) is None:
-            return do_nothing()  # Skip the function invocation
-        return func(self,*args, **kwargs)
-    return action_wrapper
-
-
-
-def trace_methods(cls):
-    for name, method in cls.__dict__.items():
-        if callable(method):
-            setattr(cls, name, trace_method(method))
-    return cls
-
-def trace_method(method):
-    def wrapper(*args, **kwargs):
-        print(f'{BLUE_COLOR}{method.__name__}{RESET_COLOR}')
-        return method(*args, **kwargs)
-    return wrapper
-
+yaml.add_constructor('!include',include_constructor,yaml.FullLoader)
 
 
 
@@ -86,17 +58,17 @@ class LcuChampionSelectSession(object):
     
 
     def set_champion_data(self):
+        file_name = 'champion_ids.yaml'
         fileDir:str = os.path.dirname(os.path.dirname(__file__))
         try:
-            file = open(f"{fileDir}/'championIds.json")
-            data = json.load(file)
-            self.champion_ids = data
+            file = open(f"{fileDir}/config/{file_name}")
+            self.champion_ids = yaml.load(file,yaml.FullLoader)
             file.close()
         except FileNotFoundError:
             champion_ids = self.fetch_champion_ids()
             self.champion_ids = champion_ids
-            with open('championIds.json','w') as champion_file:
-                json.dump(champion_ids,champion_file)
+            with open(f'{fileDir}/config/{file_name}','w') as champion_file:
+                yaml.dump(champion_ids,champion_file,Dumper=yaml.Dumper)
 
  
     def updater(self,lcu_settings=None):
@@ -394,7 +366,7 @@ class LcuChampionSelectSession(object):
         action = self.action_data()
         if action is None:return
         if self.event_phase == "PLANNING" and self.player_data['championPickIntent'] == 0:
-            declare_delay =await self.settings['champion_select','declare_delay']
+            declare_delay = await self.settings['champion_select','declare_delay']
             if declare_delay > 0:
                 phase_time = self.event_data['timer']['adjustedTimeLeftInPhase']
                 await self.wait_until(phase_time,declare_delay)
@@ -430,8 +402,8 @@ class LcuChampionSelectSession(object):
 
     async def ban_and_pick(self):
         await self.auto_declare_champion()
-        await self.auto_pick_champion()
         await self.auto_ban()
+        await self.auto_pick_champion()
 
     async def trade_position(self,player_position:str) -> None:
         """Swap pick order with another player.
@@ -451,14 +423,5 @@ class LcuChampionSelectSession(object):
         else:
             uri+= f"/lol-champ-select/v1/session/trades/{available_trades_uri[-1]['id']}/request"
         await self.session.request('POST',uri)
-
-
-    async def auto_runes(self):
-        pass
-
-    async def auto_summoner_spells(self):
-        pass
-
-
 
 

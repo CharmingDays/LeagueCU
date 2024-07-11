@@ -1,8 +1,12 @@
-import json
 import os
 import typing
 import asyncio
+import requests
+import yaml
+from utils import include_constructor
+   
 
+yaml.add_constructor('!include',include_constructor,yaml.FullLoader)
 
 RED_COLOR = "\033[31m"
 GREEN_COLOR = "\033[32m"
@@ -20,15 +24,18 @@ class LcuSettings(object):
     def load_settings(self):
         fileDir:str = os.path.dirname(os.path.dirname(__file__))
         try:
-            file = open(f"{fileDir}\\lcu_settings.json")
-            self.settings = json.load(file)
+            file = open(f"{fileDir}/config/lcu_settings.yaml",'r')
+            self.settings = yaml.load(file,Loader=yaml.FullLoader)
             file.close()
             self.color_print(GREEN_COLOR,"Settings loaded successfully")
         except FileNotFoundError:
             #load default settings
-            with open(f'{fileDir}\\default_settings.json','r',encoding='utf-8') as settings_file:
-                self.settings = json.loads(settings_file.read())
-                self.color_print(RED_COLOR,"Settings file not found, used default settings file")
+            backup_url = 'https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/d7f05b2f682da92ab1b3b552c443c3b279e92994/lcu_settings.yaml'
+            data = requests.get(backup_url)
+            with open(f'{fileDir}/config/lcu_settings.yaml','w') as file:
+                file.write(data.text)
+                self.settings = yaml.load(data.text,Loader=yaml.FullLoader)
+                self.color_print(RED_COLOR,"Settings file not found, used backup from https://gist.github.com/CharmingDays/6e7d673403439b697b10a2d6100e2288#file-lcu_settings-yaml")
         
 
     async def __getitem__(self,keys:tuple|str ):
@@ -81,4 +88,3 @@ class LcuSettings(object):
     
     def output_settings(self):
         print(self.settings['champion_select'])
-
