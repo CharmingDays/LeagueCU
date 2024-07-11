@@ -112,67 +112,17 @@ class LcuChampionSelectSession(object):
                 return player
         return None
 
-    @property
-    def banned_champions(self) -> typing.Set[int]:
-        """Returns a list of champion IDs that have been banned.
-
-        Returns:
-            list: A list of champion IDs that have been banned.
-        """
-        ban_actions = self.event_data['actions'][0]
-        return set([action['championId'] for action in ban_actions if action['completed']])
-    
-
-    @property
-    def picked_champions(self) -> typing.Set[int]:
-        """
-        Returns a list of champion IDs for the champions that have been picked.
-        
-        Returns:
-            list: A list of champion IDs.
-        """
-        pick_actions = self.event_data['actions'][2:]
-        return set([pick['championId'] for action in pick_actions for pick in action if pick['completed']])
-
-    @property
-    def hovered_champions(self) -> typing.Set[int]:
-        """Hovered champions in the current session.
-
-        Returns:
-            typing.List: The list of champions hovered by team
-        """
-        champions = [data['championPickIntent'] for data in self.event_data['myTeam'] if data['championPickIntent'] != 0]
-        return set(champions)
 
     @property
     def is_ban_phase(self) -> bool:
         return self.event_data['actions'][0][0]['inProgress']
     
 
-    def should_ban(self,champion_id) -> bool:
-        return champion_id not in self.hovered_champions and champion_id not in self.banned_champions
 
     @property
     def assigned_role(self) -> str:
         return self.player_data['assignedPosition']
 
-    @property
-    def swap_order(self) -> typing.List[dict]:
-        """Swap order for the team
-        [
-        {
-            "cellId": 1,
-            "id": 8,
-            "state": "AVAILABLE"
-        },
-        ...
-        ]
-
-
-        Returns:
-            typing.List[dict]: The swap order for the team
-        """
-        return self.event_data['pickOrderSwaps']
 
 
     async def wait_until(self,time_left:float,delay:int) -> None:
@@ -186,32 +136,6 @@ class LcuChampionSelectSession(object):
             
 
 
-    async def disabled_champions(self) -> typing.Set[int]:
-        """
-        champions that are disabled in the current session
-        """
-        try:
-            uri = '/lol-champ-select/v1/disabled-champions'
-            response = await self.session.request('GET',uri)
-            data = await response.json()
-            return set(data['championIds'])
-        except Exception as e:
-            return []
-
-
-    async def not_pickable(self,include_disabled=False) -> typing.Set[int]:
-        """
-        banned champions + picked champions + disabled champions + (unowned champions?)
-        """
-        invalid_champions = set()
-        if include_disabled:
-            disabled_champions:typing.List = await self.disabled_champions()
-            invalid_champions.update(disabled_champions)
-        
-        invalid_champions.update(self.banned_champions)
-        invalid_champions.update(self.picked_champions)
-        return invalid_champions
-    
 
     def get_action_data(self, action_type: str) -> typing.Dict[str, typing.Any] | None:
         """Get data of specific action from actions array
@@ -249,179 +173,5 @@ class LcuChampionSelectSession(object):
 
     
 
-    async def declare_champion_intent(self,champion_id:int|str) -> None:
-        """
-        Primarily used for declaring champion pick intent, but can be used to select champion for pick and ban (ban is not recommended for this method)
-
-        Args:
-            champion_id (int | str): The ID of the champion
-
-        Raises:
-            ValueError: Champion not found
-        """
-        if champion_id not in self.champion_ids:
-            raise ValueError(f"Champion with id {champion_id} does not exist.")
-        
-        action = self.get_action_data('pick')
-        if not action:return
-        if action is not None:
-            action: dict = action
-            action['championId'] = self.champion_ids[champion_id]
-            uri = f'/lol-champ-select/v1/session/actions/{action["id"]}'
-            await asyncio.wait_for(self.session.request('PATCH',uri,data=action), timeout=5)
-
-    
-    
-    async def select_champion(self,champion_id:int|str) -> None:
-        """Selects the champion at current given phase action. (Mostly for banning champions & picking)
-
-        Args:
-            champion_id (int | str): The champion identifier.
-
-        """
-
-        action = self.action_data()
-        if not action:return
-        action['championId'] = self.champion_ids[champion_id]
-        uri = f'/lol-champ-select/v1/session/actions/{action["id"]}'
-        await asyncio.wait_for(self.session.request('PATCH',uri,data=action), timeout=5)
-
-
-
-    async def complete_selection(self) -> None:
-        """
-        Complete the selection action.
-        """
-        # Suggestion 2: Add type hints for the action variable.
-        action: dict = self.action_data()
-        if not action:return
-        uri = f'/lol-champ-select/v1/session/actions/{action["id"]}/complete'
-        # Suggestion 1: Add a timeout to the POST request to avoid hanging indefinitely.
-        await asyncio.wait_for(self.session.request('POST', uri, data=action), timeout=5)
-
-
-
-    async def ban_champion_iter(self,champion_list):
-        """Creates generator of champions bannable in the current session.
-
-        Args:
-            champion_list (typing.List): List of champions to ban.
-
-        Yields:
-            int: Champion ID to ban.
-        """
-        for champion in champion_list:
-            champion_id = self.champion_ids[champion]
-            if self.should_ban(champion_id):
-                yield champion_id
-
-
-    async def pick_champion_iter(self,champion_list:typing.List[int]):
-        # FIXME debug required
-        """
-        Creates generator of champions pickable in the current session.
-
-        Args:
-            champion_list (typing.List): List of champions to pick.
-
-        Yields:
-            int: Champion ID to pick.
-        """
-        not_pickable:typing.Set = await self.not_pickable()
-        for champion in champion_list:
-            champion_id = self.champion_ids[champion]
-            if champion_id not in not_pickable:
-                yield champion_id
-
-    
-
-
-
-
-    
-    async def auto_ban(self):
-        """Automates the ban phase of the champion select.
-
-        Args:
-            ban_dict (typing.Dict[str,typing.List[str]]): Dict of champions to ban given the assigned role.
-
-        """
-        action = self.action_data()
-        if not action:return
-        if self.event_phase == "BAN_PICK" and action['type'] == 'ban':
-            ban_delay = self.settings.get(('champion_select','ban_delay'))
-            if ban_delay > 0:
-                remaining_time = self.event_data['timer']['adjustedTimeLeftInPhase']
-                await self.wait_until(remaining_time,ban_delay)
-            champion_pool = self.settings.get(('champion_select',self.assigned_role,'bans'))
-            ban_iter = self.ban_champion_iter(champion_pool)
-            banning_champion = await ban_iter.__anext__()
-            await self.select_champion(banning_champion)
-            await self.complete_selection()
-    
-    async def auto_declare_champion(self):
-        """
-        Automates the declaration of champion intent in the champion select.
-        """
-        action = self.action_data()
-        if action is None:return
-        if self.event_phase == "PLANNING" and self.player_data['championPickIntent'] == 0:
-            declare_delay = await self.settings['champion_select','declare_delay']
-            if declare_delay > 0:
-                phase_time = self.event_data['timer']['adjustedTimeLeftInPhase']
-                await self.wait_until(phase_time,declare_delay)
-
-            champions = await self.settings['champion_select',self.assigned_role,'picks']
-            pick_iter = self.pick_champion_iter(champions)
-            await self.declare_champion_intent(await pick_iter.__anext__())
-    
-
-    async def auto_pick_champion(self):
-        """
-        Automates the picking phase of the champion select.
-        """
-        action_data = self.action_data()
-        if action_data is None:return
-        if self.event_phase == "BAN_PICK" and action_data['type'] == 'pick':
-            champion_pool = await self.settings['champion_select',self.assigned_role,'picks']
-            pick_iter = self.pick_champion_iter(champion_pool)
-            picking_champion:int = await pick_iter.__anext__()
-            if self.event_phase == "BAN_PICK" and action_data['type'] == 'pick' and self.player_data['championPickIntent'] == 0:
-                #Champion not selected
-                await self.select_champion(picking_champion)
-
-            pick_delay = await self.settings['champion_select','pick_delay']
-            if pick_delay > 0:
-                time_remaining = self.event_data['timer']['adjustedTimeLeftInPhase']
-                await self.wait_until(time_remaining,pick_delay)
-            await self.complete_selection()
-
-
-
-
-
-    async def ban_and_pick(self):
-        await self.auto_declare_champion()
-        await self.auto_ban()
-        await self.auto_pick_champion()
-
-    async def trade_position(self,player_position:str) -> None:
-        """Swap pick order with another player.
-
-        Args:
-            player_position (int): The position to pick
-        """
-        #NOTE only supports first and last ATM
-        #NOTE full support for all positions will be added later
-        # player_position = 3 if player_position > 3 else player_position
-        available_trades_uri  = self.event_data['pickOrderSwaps']
-        uri = ""
-        if player_position not in ['first','last']:
-            player_position = 'last'
-        if player_position == 'first':
-            uri+= f"/lol-champ-select/v1/session/trades/{available_trades_uri[0]['id']}/request"
-        else:
-            uri+= f"/lol-champ-select/v1/session/trades/{available_trades_uri[-1]['id']}/request"
-        await self.session.request('POST',uri)
 
 
