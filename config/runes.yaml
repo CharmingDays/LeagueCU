@@ -1,10 +1,17 @@
-jinx:
-    - lethal_tempo
-    - triumph
-    - legend_alacrity
-    - coup_de_grace
-    - nimbus_cloak
-    - gathering_storm
-    - attack_speed
-    - adaptive_force
-    - armor
+222:
+    rune:
+        name: "Jinx"
+        current: true
+        primaryStyleId: 8000,
+        subStyleId: 8200
+        selectedPerkIds:
+            - 8005
+            - 9101
+            - 9104
+            - 8014
+            - 8139
+            - 8138
+            - 5008
+            - 5008
+            - 5002
+            - 5002

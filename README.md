@@ -1,18 +1,11 @@
-# LCU Automated
+# Automate the League client to get auto select the runes you selected
 
 ## Running The Application
 
-Simply run the `client.py` file inside leagueUpdate
+Simply run the `runes_client.py` file inside leagueUpdate
 
 
 
 ## Current Features
-<li>Auto Start Match</li>
-<li>Delays to pick intent, ban, and pick</li>
-<li>Auto Accept Matches</li>
-<li>Auto Hover/Ban/Select Champion</li>
-<li>Skip Honor screen</li>
-<li>Auto honor teammate</li>
-<li>Auto Play Again</li>
-<li>Avoid autofill (restarts queue if estimated time > queue time)</li>
-<li>Add delays to pick intent/ban/pick</li>
+<li>Auto create runes based on champion selected and or role assigned</li>
+<li>Option to auto select popular runes for selected champion based role</li>
