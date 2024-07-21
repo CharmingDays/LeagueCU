@@ -146,6 +146,7 @@ class LcuChampionSelectSession(object):
 
     @property
     def is_ban_phase(self) -> bool:
+        #NOTE: Use ban reveals instead for check
         return self.event_data['actions'][0][0]['inProgress']
     
 
