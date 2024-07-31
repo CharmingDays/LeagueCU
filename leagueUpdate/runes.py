@@ -30,7 +30,38 @@ class LcuRunes(object):
         return decorator
 
 
-    async def current_runes(self) -> typing.Dict[str,typing.Any]:
+
+    def sort_rune(self,rune:typing.Dict[str,typing.Any]) -> typing.Dict[str,typing.Any]:
+        """Sort the runes into a more readable format
+
+        Args:
+            runes (dict): The runes to sort
+
+        Returns:
+            dict: The sorted runes
+
+        """
+        sorted_rune = {
+            "autoModifiedSelections": [
+                0
+            ],
+            "current": True,
+            "id": rune['id'],
+            "isActive": True,
+            "isDeletable": True,
+            "isEditable": True,
+            "isValid": True,
+            "name": rune['name'],
+            "order": 0,
+            "primaryStyleId": rune['primaryStyleId'],
+            "selectedPerkIds": rune['selectedPerkIds'],
+            "subStyleId": rune['subStyleId'],
+            }
+        return sorted_rune
+
+
+
+    async def current_rune(self) -> typing.Dict[str,typing.Any]:
         """Get the currently selected runes page
 
         Returns:
@@ -38,7 +69,7 @@ class LcuRunes(object):
 
         """
         runes = await self.session.request("get",'/lol-perks/v1/currentpage')
-        return runes
+        return await runes.json()
     
 
     async def select_rune_page(self,runeId:int) -> None|typing.Dict[str,typing.Any]:
@@ -65,7 +96,7 @@ class LcuRunes(object):
         await self.session.request("delete",f'/lol-perks/v1/pages/{runeId}')
 
 
-    async def create_rune_page(self,name:str,primaryStyleId:int,selectedPerkIds:typing.List[int],subStyleId:int,selectedPerkSubStyleId:int) -> None:
+    async def create_rune_page(self,rune_tree:typing.Dict[str,typing.Any]) -> None:
         """Create a new rune page
 
         Args:
@@ -76,11 +107,4 @@ class LcuRunes(object):
             selectedPerkSubStyleId (int): The id of the selected secondary rune
 
         """
-        data = {
-            "name":name,
-            "primaryStyleId":primaryStyleId,
-            "selectedPerkIds":selectedPerkIds,
-            "subStyleId":subStyleId,
-            "selectedPerkSubStyleId":selectedPerkSubStyleId
-        }
-        await self.session.request("post",'/lol-perks/v1/pages',data=data)
+        await self.session.request("post",'/lol-perks/v1/pages',data=rune_tree)

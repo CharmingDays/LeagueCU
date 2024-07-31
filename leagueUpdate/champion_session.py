@@ -43,7 +43,8 @@ class LcuChampionSelectSession(object):
 
 
     def fetch_champion_ids(self):
-        response = requests.get('https://ddragon.leagueoflegends.com/cdn/11.16.1/data/en_US/champion.json')
+        version = requests.get('https://ddragon.leagueoflegends.com/api/versions.json').json()[0]
+        response = requests.get(f'https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/champion.json')
         if response.status_code != 200:
             backupURL = 'https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/e7b9528ca76e5cf62d32622cfb11d88cddcd7322/champid.json'
             response = requests.get(backupURL)
@@ -172,6 +173,3 @@ class LcuChampionSelectSession(object):
         return None
 
     
-
-
-

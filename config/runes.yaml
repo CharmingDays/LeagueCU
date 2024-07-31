@@ -1,17 +1,87 @@
+103:
+  current: true
+  isActive: false
+  isDeletable: true
+  isEditable: true
+  isTemporary: false
+  isValid: true
+  name: Ahri
+  order: 0
+  primaryStyleId: 8200
+  selectedPerkIds:
+    - 8214
+    - 8226
+    - 8210
+    - 8237
+    - 8304
+    - 8347
+    - 5008
+    - 5008
+    - 5001
+  subStyleId: 8300
+22:
+  current: true
+  isActive: false
+  isDeletable: true
+  isEditable: true
+  isTemporary: false
+  isValid: true
+  name: Ashe
+  order: 0
+  primaryStyleId: 8000
+  selectedPerkIds:
+    - 8005
+    - 8009
+    - 9103
+    - 8014
+    - 8321
+    - 8410
+    - 5005
+    - 5008
+    - 5001
+  subStyleId: 8300
+51:
+  current: true
+  id: 48953829
+  isActive: false
+  isDeletable: true
+  isEditable: true
+  isTemporary: false
+  isValid: true
+  name: Caitlyn
+  order: 0
+  primaryStyleId: 8000
+  selectedPerkIds:
+    - 8021
+    - 8009
+    - 9104
+    - 8017
+    - 8233
+    - 8236
+    - 5005
+    - 5008
+    - 5001
+  subStyleId: 8200
 222:
-    rune:
-        name: "Jinx"
-        current: true
-        primaryStyleId: 8000,
-        subStyleId: 8200
-        selectedPerkIds:
-            - 8005
-            - 9101
-            - 9104
-            - 8014
-            - 8139
-            - 8138
-            - 5008
-            - 5008
-            - 5002
-            - 5002
+  current: true
+  id: 606344850
+  isActive: false
+  isDeletable: true
+  isEditable: true
+  isRecommendationOverride: false
+  isTemporary: false
+  isValid: true
+  name: Jinx
+  order: 0
+  primaryStyleId: 8000
+  selectedPerkIds:
+    - 8005
+    - 8009
+    - 9103
+    - 8014
+    - 8233
+    - 8236
+    - 5005
+    - 5008
+    - 5001
+  subStyleId: 8200
