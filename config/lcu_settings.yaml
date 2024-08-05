@@ -1,15 +1,15 @@
 lobby:
     auto_accept: true
-    accept_delay: 5
+    accept_delay: 8
     avoid_autofill: true
-    teammate: ""
+    teammate: 
 champion_select:
     runes: !include 'runes.yaml'
     # accept_trades: false
     automate: true
-    ban_delay: 20
-    pick_delay: 10
-    declare_delay: 5
+    ban_delay: 25
+    pick_delay: 15
+    declare_delay: 9
     bottom:
         picks:
             - caitlyn
@@ -71,14 +71,15 @@ champion_select:
         bans:
             - leesin
             - nidalee
-            - kha zix
+            - khazix
             - nocturne
 
 post_game:
-    honor_teammate: false
+    honor_teammate: true
     skip_honor_delay: 10
     honor_types:
         heart: GGHeart
         cool: StayedCool
         caller: GreatShotcalling
     play_again: true
+    play_again_delay: 15

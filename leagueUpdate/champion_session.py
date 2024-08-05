@@ -7,7 +7,7 @@ import typing
 import requests
 import yaml
 from lcu_settings import LcuSettings
-from utils import include_constructor
+import utils
 RED_COLOR = "\033[31m"
 GREEN_COLOR = "\033[32m"
 RESET_COLOR = "\033[0m"
@@ -27,7 +27,7 @@ actions: List
 """
 
 
-yaml.add_constructor('!include',include_constructor,yaml.FullLoader)
+yaml.add_constructor('!include',utils.include_constructor,yaml.FullLoader)
 
 
 
@@ -176,14 +176,14 @@ class LcuChampionSelectSession(object):
         return self.event_data['pickOrderSwaps']
 
 
-    async def wait_until(self,time_left:float,delay:int) -> None:
-        """
-        Waits until delay time is met
-        """
-        while (time_left -1000) > delay and delay > 1:
-            await asyncio.sleep(1)
-            delay-=1
-            time_left-=1000
+    # async def wait_until(self,time_left:float,delay:int) -> None:
+    #     """
+    #     Waits until delay time is met
+    #     """
+    #     while (time_left -1000) > delay and delay > 1:
+    #         await asyncio.sleep(1)
+    #         delay-=1
+    #         time_left-=1000
             
 
 
@@ -353,7 +353,7 @@ class LcuChampionSelectSession(object):
             ban_delay = self.settings.get(('champion_select','ban_delay'))
             if ban_delay > 0:
                 remaining_time = self.event_data['timer']['adjustedTimeLeftInPhase']
-                await self.wait_until(remaining_time,ban_delay)
+                await utils.wait_until(remaining_time,ban_delay)
             champion_pool = self.settings.get(('champion_select',self.assigned_role,'bans'))
             ban_iter = self.ban_champion_iter(champion_pool)
             banning_champion = await ban_iter.__anext__()
@@ -370,7 +370,7 @@ class LcuChampionSelectSession(object):
             declare_delay = await self.settings['champion_select','declare_delay']
             if declare_delay > 0:
                 phase_time = self.event_data['timer']['adjustedTimeLeftInPhase']
-                await self.wait_until(phase_time,declare_delay)
+                await utils.wait_until(phase_time,declare_delay)
 
             champions = await self.settings['champion_select',self.assigned_role,'picks']
             pick_iter = self.pick_champion_iter(champions)
@@ -394,7 +394,7 @@ class LcuChampionSelectSession(object):
             pick_delay = await self.settings['champion_select','pick_delay']
             if pick_delay > 0:
                 time_remaining = self.event_data['timer']['adjustedTimeLeftInPhase']
-                await self.wait_until(time_remaining,pick_delay)
+                await utils.wait_until(time_remaining,pick_delay)
             await self.complete_selection()
 
 

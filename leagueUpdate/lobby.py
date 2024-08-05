@@ -79,7 +79,7 @@ class LcuLobby(object):
         uri = '/lol-lobby/v2/lobby/matchmaking/search'
         response = await self.session.request('delete',uri)
         if not response.ok:
-            return {'errorCode':response.status_code}
+            return {'errorCode':response.status}
 
 
     async def create_lobby(self,lobby_type:str="RANKED"):
