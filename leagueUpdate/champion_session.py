@@ -334,10 +334,6 @@ class LcuChampionSelectSession(object):
             if champion_id not in not_pickable:
                 yield champion_id
 
-    
-
-
-
 
     
     async def auto_ban(self):

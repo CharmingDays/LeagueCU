@@ -2,7 +2,9 @@ lobby:
     auto_accept: true
     accept_delay: 8
     avoid_autofill: true
-    teammate: 
+    auto_start: true
+    teammate:
+    excess_queue_time: 35
 champion_select:
     runes: !include 'runes.yaml'
     # accept_trades: false
@@ -12,16 +14,16 @@ champion_select:
     declare_delay: 9
     bottom:
         picks:
+            - jhin
             - caitlyn
+            - missfortune
             - jinx
-            - ashe
             - vayne
             - kogmaw
-            - sivir
 
         bans:
-            - leona
             - lux
+            - leona
             - blitzcrank
             - brand
             - zyra
@@ -65,9 +67,9 @@ champion_select:
     jungle:
         picks:
             - lilia
-            - graves
+            - shyvana
+            - amumu
             - rammus
-            - sejuani
         bans:
             - leesin
             - nidalee

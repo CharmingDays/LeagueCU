@@ -44,7 +44,7 @@ class LcuLobby(object):
         uri = '/lol-lobby/v2/lobby'
         response =await self.session.request('delete',uri)
         if not response.ok:
-            return {'errorCode':response.status_code}
+            return {'errorCode':response.status}
         
 
     async def invite_players(self,players:typing.List[str]):
@@ -55,7 +55,7 @@ class LcuLobby(object):
         uri = '/lol-lobby/v2/lobby'
         response = await self.session.request('get',uri)
         if not response.ok:
-            return {'errorCode':response.status_code}
+            return {'errorCode':response.status}
         return await response.json()   
 
     async def update_party_members(self):
@@ -71,7 +71,7 @@ class LcuLobby(object):
         uri = '/lol-lobby/v2/lobby/matchmaking/search'
         response = await self.session.request('post',uri)
         if not response.ok:
-            return {'errorCode':response.status_code}
+            return {'errorCode':response.status}
 
 
 
@@ -98,5 +98,5 @@ class LcuLobby(object):
         }
         resp = await self.session.request('post',uri,data=payload)
         if not resp.ok:
-            return {'errorCode':resp.status_code}
+            return {'errorCode':resp.status}
         return await resp.json()

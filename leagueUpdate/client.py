@@ -7,7 +7,6 @@ from summoner import LcuSummoner
 from lcu_settings import LcuSettings
 from lobby import LcuLobby
 import utils
-import time
 
 
 
@@ -17,7 +16,11 @@ champion_select:LcuChampionSelectSession = LcuChampionSelectSession()
 summoner:LcuSummoner = LcuSummoner()
 settings:LcuSettings = LcuSettings()
 lobby:LcuLobby = LcuLobby()
-
+async_event = asyncio.Event()
+session_data = {
+    'auto_start':True,
+    'previous_state':""
+}
 
 
 
@@ -32,7 +35,6 @@ async def on_connect(conn:Connection):
         await asyncio.sleep(5)
         summoner_info=await summoner.summoner_info()
     print(f"Summoner: {summoner_info['displayName']}\nID: {summoner_info['summonerId']}\nLevel: {summoner_info['summonerLevel']}")
-    print(await lobby.lobby_settings())
 
 
 
@@ -56,6 +58,14 @@ async def matchmaking_events(connection:Connection,event:Response):
         await connection.request("post",'/lol-matchmaking/v1/ready-check/accept')
 
 
+async def should_start_queue():
+    async_event.set()
+    if await settings['lobby','auto_start'] and session_data['auto_start'] and session_data['previous_state'] != "Matchmaking":
+        return True
+    return False
+
+
+
 @client.ws.register('/lol-matchmaking/v1/search',event_types=('UPDATE',))
 @lobby.updater()
 async def avoid_autofill(connection:Connection,event:Response):
@@ -65,10 +75,14 @@ async def avoid_autofill(connection:Connection,event:Response):
         connection (Connection): The aiohttp connection object
         event (Response): _description_
     """
+    if event.data['readyCheck']['timer'] > 0:
+        # pause if there is a dodge timer
+        return
+    excess_time = await settings['lobby','excess_queue_time']
     if await settings['lobby','avoid_autofill']:
         lobby_info = await lobby.lobby_info() 
         if lobby_info['localMember']['isLeader']:
-            if event.data['timeInQueue']+30 > event.data['estimatedQueueTime']:
+            if event.data['timeInQueue']+excess_time > event.data['estimatedQueueTime']:
                 await lobby.cancel_queue()
                 await asyncio.sleep(10)
                 await lobby.find_match()
@@ -77,8 +91,12 @@ async def avoid_autofill(connection:Connection,event:Response):
 async def gameflow_phases(conn:Connection,event:Response):
     # Matchmaking,ReadyCheck,ChampSelect,GameStart,InProgress,WaitingForStats,PreEndOfGame,EndOfGame, Lobby
     print('gameflow:',event.data)
+    if event.data == "Lobby":
+        should_start =await should_start_queue()
+        if should_start:
+            await lobby.find_match()
 
-    if event.data == 'Matchmaking':
+    elif event.data == 'Matchmaking':
         lobby_data = await lobby.lobby_info()
         local_player_id = lobby_data['localMember']['summonerId']
         if len(lobby_data['members']) > 1:
@@ -86,24 +104,20 @@ async def gameflow_phases(conn:Connection,event:Response):
             await settings.set(('lobby','teammate'),teammate)
         else:
             await settings.set(('lobby','teammate'),"")
-    if event.data == "ChampSelect":
+    elif event.data == "ChampSelect":
+        async_event.clear() # clear the event to prevent auto-starting queue
+        session_data['auto_start'] = True
         honoring_user = await settings['post_game','honor_teammate']
         print("Honor teammate:",honoring_user)
-            
-    # if event.data == 'GameStart':
-    #     settings.settings['lobby'].remove('stopped',None)# reset avoid autofill counter
-    if event.data == 'PreEndOfGame':
+    
+    elif event.data == 'PreEndOfGame':
         skip_delay = settings.get(('post_game','skip_honor_delay'))
         if not await settings['post_game','honor_teammate'] or await settings['lobby','teammate'] == None:
             if skip_delay > 0:
                 await asyncio.sleep(skip_delay)
-            return await client.connection.request('post','/lol-honor-v2/v1/honor-player',data={'honorPlayerRequest':False})
+            await client.connection.request('post','/lol-honor-v2/v1/honor-player',data={'honorPlayerRequest':False})
 
         else:
-            # ballot_resp = await conn.request('get','/lol-honor-v2/v1/ballot')
-            # player_data = await ballot_resp.json()
-            # print(player_data)
-            # await conn.request('post','/lol-honor-v2/v1/honor-player',data={'honorPlayerRequest':False})
             honor_data = {
                 "honorCategory": settings.get(('post_game','honor_types','heart')),
                 "summonerId": await settings['lobby','teammate'],
@@ -113,12 +127,13 @@ async def gameflow_phases(conn:Connection,event:Response):
             print("Honoring:",honor_data)
             await client.connection.request('post','/lol-honor-v2/v1/honor-player',data=honor_data)
 
-    if event.data == 'EndOfGame':
+    elif event.data == 'EndOfGame':
         if await settings['post_game','play_again']:
             if await settings['post_game','play_again_delay'] > 0:
                 await asyncio.sleep(await settings['post_game','play_again_delay'])
             await conn.request("post",'/lol-lobby/v2/play-again')
 
+    session_data['previous_state'] = event.data
 
 if __name__ == "__main__":
     client.start()
