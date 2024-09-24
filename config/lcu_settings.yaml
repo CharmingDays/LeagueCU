@@ -5,6 +5,7 @@ lobby:
     auto_start: true
     teammate:
     excess_queue_time: 35
+    max_queue_time: 850 #stop queue reset once total time>850
 champion_select:
     runes: !include 'runes.yaml'
     # accept_trades: false
@@ -14,27 +15,29 @@ champion_select:
     declare_delay: 9
     bottom:
         picks:
-            - jhin
-            - caitlyn
-            - missfortune
             - jinx
+            - kaisa
             - vayne
+            - jhin
+            - missfortune
+            - caitlyn
             - kogmaw
 
         bans:
+            - amumu
+            - senna
             - lux
             - leona
             - blitzcrank
             - brand
-            - zyra
     middle:
         picks:
-            - ahri
+            - hwei
             - leblanc
             - lux
             - orianna
         bans:
-            - syndra
+            - xerath 
             - kassadin
             - yasuo
             - galio
@@ -72,7 +75,7 @@ champion_select:
             - rammus
         bans:
             - leesin
-            - nidalee
+            - amumu
             - khazix
             - nocturne
 

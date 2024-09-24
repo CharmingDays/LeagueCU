@@ -18,7 +18,7 @@ class LcuLobby(object):
             async def update_wrapper(*args,**kwargs):
                 self.session = args[0]
                 try:
-                    self.event_data = args[1]
+                    self.event_data = args[1] if len(args) > 1 else {}
                 except IndexError:
                     pass
                 if lcu_settings:

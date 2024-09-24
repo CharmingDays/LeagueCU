@@ -1,17 +1,20 @@
 import asyncio
-import json
 import os
 from lcu_driver.connection import Connection as socketConnection
-from lcu_driver.events.responses import WebsocketEventResponse as socketResponse
 import typing
 import requests
 import yaml
 from lcu_settings import LcuSettings
 import utils
+
+
+
+
 RED_COLOR = "\033[31m"
 GREEN_COLOR = "\033[32m"
 RESET_COLOR = "\033[0m"
 BLUE_COLOR = "\033[34m"
+
 """
 actions: List
     [
@@ -26,9 +29,7 @@ actions: List
     ]
 """
 
-
 yaml.add_constructor('!include',utils.include_constructor,yaml.FullLoader)
-
 
 
 class LcuChampionSelectSession(object):
@@ -43,7 +44,8 @@ class LcuChampionSelectSession(object):
 
 
     def fetch_champion_ids(self):
-        response = requests.get('https://ddragon.leagueoflegends.com/cdn/11.16.1/data/en_US/champion.json')
+        dragon_version = requests.get('https://ddragon.leagueoflegends.com/api/versions.json').json()[0]
+        response = requests.get(f'https://ddragon.leagueoflegends.com/cdn/{dragon_version}/data/en_US/champion.json')
         if response.status_code != 200:
             backupURL = 'https://gist.githubusercontent.com/CharmingDays/6e7d673403439b697b10a2d6100e2288/raw/e7b9528ca76e5cf62d32622cfb11d88cddcd7322/champid.json'
             response = requests.get(backupURL)
@@ -318,7 +320,6 @@ class LcuChampionSelectSession(object):
 
 
     async def pick_champion_iter(self,champion_list:typing.List[int]):
-        # FIXME debug required
         """
         Creates generator of champions pickable in the current session.
 
@@ -336,44 +337,44 @@ class LcuChampionSelectSession(object):
 
 
     
-    async def auto_ban(self):
+    async def auto_ban(self) -> None:
         """Automates the ban phase of the champion select.
 
         Args:
             ban_dict (typing.Dict[str,typing.List[str]]): Dict of champions to ban given the assigned role.
 
         """
-        action = self.action_data()
+        action:typing.Union[dict,None] = self.action_data()
         if not action:return
         if self.event_phase == "BAN_PICK" and action['type'] == 'ban':
             ban_delay = self.settings.get(('champion_select','ban_delay'))
             if ban_delay > 0:
                 remaining_time = self.event_data['timer']['adjustedTimeLeftInPhase']
                 await utils.wait_until(remaining_time,ban_delay)
-            champion_pool = self.settings.get(('champion_select',self.assigned_role,'bans'))
-            ban_iter = self.ban_champion_iter(champion_pool)
-            banning_champion = await ban_iter.__anext__()
+            ban_pool:list = self.settings.get(('champion_select',self.assigned_role,'bans'))
+            ban_iter:typing.AsyncIterator = self.ban_champion_iter(ban_pool)
+            banning_champion:int = await ban_iter.__anext__()
             await self.select_champion(banning_champion)
             await self.complete_selection()
     
-    async def auto_declare_champion(self):
+    async def auto_declare_champion(self) -> None:
         """
         Automates the declaration of champion intent in the champion select.
         """
-        action = self.action_data()
+        action:typing.Union[dict,None] = self.action_data()
         if action is None:return
         if self.event_phase == "PLANNING" and self.player_data['championPickIntent'] == 0:
-            declare_delay = await self.settings['champion_select','declare_delay']
+            declare_delay:int = await self.settings['champion_select','declare_delay']
             if declare_delay > 0:
                 phase_time = self.event_data['timer']['adjustedTimeLeftInPhase']
                 await utils.wait_until(phase_time,declare_delay)
 
-            champions = await self.settings['champion_select',self.assigned_role,'picks']
-            pick_iter = self.pick_champion_iter(champions)
+            champions:list = await self.settings['champion_select',self.assigned_role,'picks']
+            pick_iter:typing.AsyncIterable = self.pick_champion_iter(champions)
             await self.declare_champion_intent(await pick_iter.__anext__())
     
 
-    async def auto_pick_champion(self):
+    async def auto_pick_champion(self) -> None:
         """
         Automates the picking phase of the champion select.
         """
@@ -387,7 +388,7 @@ class LcuChampionSelectSession(object):
                 #Champion not selected
                 await self.select_champion(picking_champion)
 
-            pick_delay = await self.settings['champion_select','pick_delay']
+            pick_delay:int = await self.settings['champion_select','pick_delay']
             if pick_delay > 0:
                 time_remaining = self.event_data['timer']['adjustedTimeLeftInPhase']
                 await utils.wait_until(time_remaining,pick_delay)
@@ -397,7 +398,7 @@ class LcuChampionSelectSession(object):
 
 
 
-    async def ban_and_pick(self):
+    async def ban_and_pick(self) -> None:
         await self.auto_declare_champion()
         await self.auto_ban()
         await self.auto_pick_champion()
